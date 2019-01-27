@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router(); // eslint-disable-line new-cap
 
 router.get('/*', (req, res) => {
-  res.render('index', { title: 'SteemConnect' });
+  res.redirect(`https://steemconnect.com${req.path}`);
 });
 
 module.exports = router;
