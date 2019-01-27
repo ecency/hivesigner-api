@@ -1,5 +1,5 @@
 {
-  "name": "sc2",
+  "name": "steemconnect-api",
   "version": "0.1.0",
   "engines": {
     "node": ">=8.1.4",
@@ -7,20 +7,12 @@
   },
   "bin": "./bin/www",
   "main": "./bin/www",
-  "private": true,
   "scripts": {
     "start": "./bin/www",
-    "start-dev": "nodemon --ignore src ./bin/www | bunyan -o short",
     "eslint-autofix": "eslint --fix \"src/**/*.js\" \"*.js\"",
-    "test": "npm run lint && nsp check --output summary",
-    "lint": "eslint \"src/**/*.js\" \"routes/**/*.js\" \"helpers/**/*.js\"",
-    "build": "webpack --progress -p --config webpack/webpack.prod.config.js",
-    "build-dev": "webpack --progress -p --config webpack/webpack.config.js",
-    "postinstall": "npm run build"
+    "test": "npm run lint",
+    "lint": "eslint \"routes/**/*.js\" \"helpers/**/*.js\""
   },
-  "pre-commit": [
-    "test"
-  ],
   "dependencies": {
     "@steemit/steem-js": "^0.7.2",
     "antd": "^2.13.11",
@@ -71,7 +63,6 @@
     "numeral": "^1.5.3",
     "pg-promise": "^5.6.7",
     "postcss-loader": "^2.0.6",
-    "pre-commit": "^1.2.2",
     "query-string": "^4.2.3",
     "react": "^15.3.2",
     "react-dom": "^15.3.2",
