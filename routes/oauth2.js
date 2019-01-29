@@ -1,31 +1,12 @@
 const express = require('express');
 const debug = require('debug')('sc2:server');
-const Sequelize = require('sequelize');
 const { issueAppToken, issueAppCode, issueAppRefreshToken } = require('../helpers/token');
 const { authenticate } = require('../helpers/middleware');
 const config = require('../config.json');
 
 const router = express.Router(); // eslint-disable-line new-cap
-const Op = Sequelize.Op;
 
-router.get('/oauth2/authorize', async (req, res) => {
-  const redirectUri = req.query.redirect_uri;
-  const clientId = req.query.client_id;
-  const app = await req.db.apps.findOne({
-    where: {
-      client_id: clientId,
-      redirect_uris: { [Op.contains]: [redirectUri] },
-    },
-  });
-  if (!app) {
-    debug(`The app @${clientId} has not been setup.`);
-    res.redirect('/404');
-  } else {
-    res.render('index', { title: 'SteemConnect' });
-  }
-});
-
-router.all('/api/oauth2/authorize', authenticate('user'), async (req, res) => {
+router.all('/authorize', authenticate('user'), async (req, res) => {
   const clientId = req.query.client_id;
   const responseType = req.query.response_type;
   const scope = req.query.scope ? req.query.scope.split(',') : [];
@@ -46,7 +27,7 @@ router.all('/api/oauth2/authorize', authenticate('user'), async (req, res) => {
 });
 
 /** Request app access token */
-router.all('/api/oauth2/token', authenticate(['code', 'refresh']), async (req, res) => {
+router.all('/token', authenticate(['code', 'refresh']), async (req, res) => {
   debug(`Issue app token for user @${req.user} using @${req.proxy} proxy.`);
   const accessToken = await issueAppToken(req.proxy, req.user, req.scope);
   const payload = {
@@ -61,7 +42,7 @@ router.all('/api/oauth2/token', authenticate(['code', 'refresh']), async (req, r
 });
 
 /** Revoke app access token */
-router.all('/api/oauth2/token/revoke', authenticate('app'), async (req, res) => {
+router.all('/token/revoke', authenticate('app'), async (req, res) => {
   await req.db.tokens.destroy({ where: { token: req.token } });
   res.json({ success: true });
 });
