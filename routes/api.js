@@ -3,8 +3,7 @@ const { authenticate, verifyPermissions } = require('../helpers/middleware');
 const { encode } = require('@steemit/steem-js/lib/auth/memo');
 const { issueUserToken } = require('../helpers/token');
 const { getUserMetadata, updateUserMetadata } = require('../helpers/metadata');
-const { getErrorMessage } = require('../helpers/operation');
-const { isOperationAuthor } = require('../helpers/operation');
+const { getErrorMessage, isOperationAuthor } = require('../helpers/operation');
 const config = require('../config.json');
 
 const router = express.Router(); // eslint-disable-line new-cap
