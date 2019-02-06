@@ -8,7 +8,6 @@ const cors = require('cors');
 const steem = require('@steemit/steem-js');
 const db = require('./db/models');
 const { strategy } = require('./helpers/middleware');
-const logger = require('./helpers/logger');
 
 if (process.env.STEEMD_URL_SERVER) {
   steem.api.setOptions({ url: process.env.STEEMD_URL_SERVER });
@@ -24,31 +23,6 @@ const server = http.Server(app);
 // iframe header
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  next();
-});
-
-// logging middleware
-app.use((req, res, next) => {
-  const start = process.hrtime();
-  const reqId = req.headers['x-amzn-trace-id'] ||
-    req.headers['x-request-id'] ||
-    `dev-${Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)}`;
-  const reqIp = req.headers['x-forwarded-for'] ||
-    req.connection.remoteAddress;
-  req.log = logger.child({ req_id: reqId, ip: reqIp });
-  req.log.debug({ req }, '<-- request');
-  res.set('X-Request-Id', reqId);
-  const logOut = () => {
-    const delta = process.hrtime(start);
-    const info = {
-      ms: (delta[0] * 1e3) + (delta[1] / 1e6),
-      code: res.statusCode,
-    };
-    req.log.info(info, '%s %s%s', req.method, req.baseUrl, req.url);
-    req.log.debug({ res }, '--> response');
-  };
-  res.once('finish', logOut);
-  res.once('close', logOut);
   next();
 });
 
