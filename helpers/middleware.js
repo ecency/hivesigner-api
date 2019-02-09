@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const intersection = require('lodash/intersection');
 const { tokens, apps } = require('../db/models');
+const { verifySignature } = require('./token');
 
 /**
  * Check if user allow app proxy account to post on his behalf
@@ -41,20 +42,66 @@ const strategy = (req, res, next) => {
     || req.query.refresh_token
     || req.body.refresh_token;
 
-  let decoded;
+  let isJwt = false;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     /* eslint-disable no-param-reassign */
     req.token = token;
     req.role = decoded.role;
     req.user = decoded.user;
     req.proxy = decoded.proxy;
     req.scope = decoded.scope || [];
+    req.type = 'jwt';
+    isJwt = true;
     /* eslint-enable no-param-reassign */
-  } catch (err) {
-    // console.log(err);
+  } catch (e) {
+    // console.log(e);
   }
-  next();
+
+  if (!isJwt) {
+    try {
+      const decoded = Buffer.from(token, 'base64').toString();
+      const tokenObj = JSON.parse(decoded);
+      const signedMessage = tokenObj.signed_message;
+      if (
+        tokenObj.authors
+        && tokenObj.authors[0]
+        && tokenObj.signatures
+        && tokenObj.signatures[0]
+        && signedMessage
+        && signedMessage.type
+        && signedMessage.type === 'login'
+        && signedMessage.app
+      ) {
+        const message = JSON.stringify({
+          signed_message: signedMessage,
+          authors: tokenObj.authors,
+        });
+        const username = tokenObj.authors[0];
+        verifySignature(message, username, tokenObj.signatures[0], (err, isValid) => {
+          if (!err && isValid) {
+            console.log('Token signature is valid', username);
+            /* eslint-disable no-param-reassign */
+            req.token = token;
+            req.role = 'app';
+            req.user = username;
+            req.proxy = signedMessage.app;
+            req.scope = ['login'];
+            req.type = 'signature';
+            /* eslint-enable no-param-reassign */
+          }
+          next();
+        });
+      } else {
+        next();
+      }
+    } catch (e) {
+      // console.log('Token signature decoding failed', e);
+      next();
+    }
+  } else {
+    next();
+  }
 };
 
 const authenticate = roles => async (req, res, next) => {
@@ -82,7 +129,7 @@ const authenticate = roles => async (req, res, next) => {
       error: 'invalid_grant',
       error_description: 'The token has invalid role',
     });
-  } else if (req.role === 'app') {
+  } else if (req.role === 'app' && req.type === 'jwt') {
     const token = await tokens.findOne({ where: { token: req.token } });
     if (!token) {
       res.status(401).json({

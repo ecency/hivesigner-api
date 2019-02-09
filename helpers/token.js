@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const debug = require('debug')('sc2:server');
+const { PublicKey, cryptoUtils, Signature } = require('dsteem');
+const client = require('./client');
 const { tokens } = require('../db/models');
 const config = require('../config.json');
 
@@ -52,9 +54,30 @@ const issueAppRefreshToken = (proxy, user, scope = []) => (
   )
 );
 
+const verifySignature = (message, username, signature, cb) => {
+  client.database.getAccounts([username]).then((accounts) => {
+    if (accounts[0] && accounts[0].name) {
+      const hash = cryptoUtils.sha256(message);
+      let signatureIsValid = false;
+      ['owner', 'active', 'posting'].forEach((type) => {
+        accounts[0][type].key_auths.forEach((key) => {
+          if (PublicKey.fromString(key[0]).verify(hash, Signature.fromString(signature))) {
+            signatureIsValid = true;
+          }
+        });
+      });
+      cb(null, signatureIsValid);
+    }
+  }).catch((e) => {
+    console.log('Get accounts failed', e);
+    cb(e, null);
+  });
+};
+
 module.exports = {
   issueUserToken,
   issueAppToken,
   issueAppCode,
   issueAppRefreshToken,
+  verifySignature,
 };
