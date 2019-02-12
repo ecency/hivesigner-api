@@ -5,6 +5,7 @@ const { issueUserToken } = require('../helpers/token');
 const { getUserMetadata, updateUserMetadata } = require('../helpers/metadata');
 const { getErrorMessage, isOperationAuthor } = require('../helpers/operation');
 const config = require('../config.json');
+const redis = require('../helpers/redis');
 
 const router = express.Router(); // eslint-disable-line new-cap
 
@@ -34,6 +35,16 @@ router.put('/me', authenticate('app'), async (req, res) => {
         res.status(501).send('request failed');
         return;
       }
+
+      /** Store global metadata update count per month and by app */
+      const month = new Date().getUTCMonth() + 1;
+      const year = new Date().getUTCFullYear();
+      redis.multi([
+        ['incr', 'sc-api:metadata'],
+        ['incr', `sc-api:metadata:${month}-${year}`],
+        ['incr', `sc-api:metadata:@${req.proxy}`],
+        ['incr', `sc-api:metadata:@${req.proxy}:${month}-${year}`],
+      ]).execAsync();
 
       res.json({
         user: req.user,
@@ -122,6 +133,17 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
     });
   } else {
     console.log(`Broadcast transaction for @${req.user} from app @${req.proxy}`);
+
+    /** Store global broadcast count per month and by app */
+    const month = new Date().getUTCMonth() + 1;
+    const year = new Date().getUTCFullYear();
+    redis.multi([
+      ['incr', 'sc-api:broadcast'],
+      ['incr', `sc-api:broadcast:${month}-${year}`],
+      ['incr', `sc-api:broadcast:@${req.proxy}`],
+      ['incr', `sc-api:broadcast:@${req.proxy}:${month}-${year}`],
+    ]).execAsync();
+
     req.steem.broadcast.send(
       { operations, extensions: [] },
       { posting: process.env.BROADCASTER_POSTING_WIF },
