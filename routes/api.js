@@ -3,7 +3,7 @@ const { authenticate, verifyPermissions } = require('../helpers/middleware');
 const { encode } = require('@steemit/steem-js/lib/auth/memo');
 const { issueUserToken } = require('../helpers/token');
 const { getUserMetadata, updateUserMetadata } = require('../helpers/metadata');
-const { getErrorMessage, isOperationAuthor } = require('../helpers/operation');
+const { getErrorMessage, isOperationAuthor, getAppProfile } = require('../helpers/utils');
 const config = require('../config.json');
 const redis = require('../helpers/redis');
 
@@ -196,8 +196,8 @@ router.all('/token/revoke/:type/:clientId?', authenticate('user'), async (req, r
   const where = {};
 
   if (type === 'app' && clientId) {
-    const app = await req.db.apps.findOne({ where: { client_id: clientId } });
-    if (app.owner === user) {
+    const app = await getAppProfile(clientId);
+    if (app.creator && app.creator === user) {
       where.client_id = clientId;
     }
   } else if (type === 'user') {

@@ -1,7 +1,9 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const intersection = require('lodash/intersection');
-const { tokens, apps } = require('../db/models');
+const { tokens } = require('../db/models');
 const { verifySignature } = require('./token');
+const { getAppProfile } = require('./utils');
 
 /**
  * Check if user allow app proxy account to post on his behalf
@@ -105,18 +107,6 @@ const strategy = (req, res, next) => {
 };
 
 const authenticate = roles => async (req, res, next) => {
-  if (req.proxy) {
-    const appStatus = await apps.findOne({
-      where: { client_id: req.proxy },
-    });
-    if (!appStatus || (appStatus && appStatus.is_disabled)) {
-      res.status(401).json({
-        error: 'application_disabled',
-        error_description: 'This application has been disabled by SteemConnect',
-      });
-      return;
-    }
-  }
   let role = roles;
   if (Array.isArray(roles)) {
     if (req.role && roles.includes(req.role)) {
@@ -140,14 +130,12 @@ const authenticate = roles => async (req, res, next) => {
       next();
     }
   } else if (req.role === 'code' || req.role === 'refresh') {
+    const app = await getAppProfile(req.proxy);
+
     const secret = req.query.client_secret || req.body.client_secret;
-    const app = await apps.findOne({
-      where: {
-        client_id: req.proxy,
-        secret,
-      },
-    });
-    if (!app) {
+    const secretHash = crypto.createHash('sha256').update(secret).digest('hex');
+
+    if (!app.secret || secretHash !== app.secret) {
       res.status(401).json({
         error: 'invalid_grant',
         error_description: 'The code or secret is not valid',

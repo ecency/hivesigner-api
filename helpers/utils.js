@@ -1,4 +1,6 @@
+const Promise = require('bluebird');
 const { get, has } = require('lodash');
+const client = require('./client');
 const operationAuthor = require('./operation-author.json');
 
 /** Parse error message from Steemd response */
@@ -25,7 +27,26 @@ const isOperationAuthor = (operation, query, username) => {
   return false;
 };
 
+const getAppProfile = username => new Promise((resolve, reject) => {
+  client.database.getAccounts([username]).then((accounts) => {
+    let metadata;
+    try {
+      metadata = JSON.parse(accounts[0].json_metadata);
+      if (metadata.profile && metadata.profile.type && metadata.profile.type === 'app') {
+        resolve(metadata.profile);
+      } else {
+        reject(`The account @${username} is not an application`);
+      }
+    } catch (e) {
+      reject(`Failed to parse account @${username} "json_metadata"`);
+    }
+  }).catch((e) => {
+    reject(`Failed to load account @${username}`, e);
+  });
+});
+
 module.exports = {
   getErrorMessage,
   isOperationAuthor,
+  getAppProfile,
 };
