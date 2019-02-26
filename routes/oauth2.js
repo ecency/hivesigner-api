@@ -1,5 +1,6 @@
 const express = require('express');
 const debug = require('debug')('sc2:server');
+const { tokens } = require('../db/models');
 const { issueAppToken, issueAppCode, issueAppRefreshToken } = require('../helpers/token');
 const { authenticate } = require('../helpers/middleware');
 const config = require('../config.json');
@@ -43,7 +44,7 @@ router.all('/token', authenticate(['code', 'refresh']), async (req, res) => {
 
 /** Revoke app access token */
 router.all('/token/revoke', authenticate('app'), async (req, res) => {
-  await req.db.tokens.destroy({ where: { token: req.token } });
+  await tokens.destroy({ where: { token: req.token } });
   res.json({ success: true });
 });
 

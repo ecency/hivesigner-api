@@ -1,16 +1,17 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const intersection = require('lodash/intersection');
+const { intersection } = require('lodash');
 const { tokens } = require('../db/models');
 const { verifySignature } = require('./token');
 const { getAppProfile } = require('./utils');
+const client = require('./client');
 
 /**
  * Check if user allow app proxy account to post on his behalf
  * And if app allow @steemconnect to post on his behalf
  */
 const verifyPermissions = async (req, res, next) => {
-  const accounts = await req.steem.api.getAccountsAsync([req.proxy, req.user]);
+  const accounts = await client.database.getAccounts([req.proxy, req.user]);
 
   const userAccountAuths = accounts[1].posting.account_auths.map(account => account[0]);
   if (userAccountAuths.indexOf(req.proxy) === -1) {
