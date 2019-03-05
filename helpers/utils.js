@@ -9,7 +9,7 @@ const getErrorMessage = (error) => {
   if (has(error, 'data.stack[0].format')) {
     errorMessage = error.data.stack[0].format;
     if (has(error, 'data.stack[0].data')) {
-      const data = error.data.stack[0].data;
+      const { data } = error.data.stack[0];
       Object.keys(data).forEach((d) => {
         errorMessage = errorMessage.split('${' + d + '}').join(data[d]); // eslint-disable-line prefer-template
       });

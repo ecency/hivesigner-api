@@ -9,16 +9,18 @@ const config = require('../config.json');
 const issueUserToken = user => (
   jwt.sign(
     { role: 'user', user },
-    process.env.JWT_SECRET
+    process.env.JWT_SECRET,
   )
 );
 
 /** Create a new access token for application and store it on the database */
 const issueAppToken = async (proxy, user, scope = []) => {
   const token = jwt.sign(
-    { role: 'app', proxy, user, scope },
+    {
+      role: 'app', proxy, user, scope,
+    },
     process.env.JWT_SECRET,
-    { expiresIn: config.token_expiration }
+    { expiresIn: config.token_expiration },
   );
 
   try {
@@ -37,9 +39,11 @@ const issueAppToken = async (proxy, user, scope = []) => {
  */
 const issueAppCode = (proxy, user, scope = []) => (
   jwt.sign(
-    { role: 'code', proxy, user, scope },
+    {
+      role: 'code', proxy, user, scope,
+    },
     process.env.JWT_SECRET,
-    { expiresIn: 600 }
+    { expiresIn: 600 },
   )
 );
 
@@ -49,8 +53,10 @@ const issueAppCode = (proxy, user, scope = []) => (
  */
 const issueAppRefreshToken = (proxy, user, scope = []) => (
   jwt.sign(
-    { role: 'refresh', proxy, user, scope },
-    process.env.JWT_SECRET
+    {
+      role: 'refresh', proxy, user, scope,
+    },
+    process.env.JWT_SECRET,
   )
 );
 
