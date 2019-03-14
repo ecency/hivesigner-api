@@ -142,7 +142,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       ['incr', `sc-api:broadcast:@${req.proxy}:${month}-${year}`],
     ]).execAsync();
 
-    /** Broadcast with Steem.js
+    /** Broadcast with Steem.js */
     req.steem.broadcast.send(
       { operations, extensions: [] },
       { posting: process.env.BROADCASTER_POSTING_WIF },
@@ -160,11 +160,10 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
             error_description: getErrorMessage(err) || err.message || err,
           });
         }
-      }
+      },
     );
-    */
 
-    /** Sign and prepare tx with dsteem, broadcast with Steem.js */
+    /** Sign and prepare tx with dsteem, broadcast with Steem.js
     client.customPrepareTx(operations, process.env.BROADCASTER_POSTING_WIF).then((signedTx) => {
       req.steem.api.broadcastTransactionSynchronousAsync(signedTx).then((result) => {
         console.log(`Broadcast transaction for @${req.user} from app @${req.proxy}`);
@@ -186,6 +185,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
         error_description: getErrorMessage(e) || e.message || e,
       });
     });
+    */
   }
 });
 
