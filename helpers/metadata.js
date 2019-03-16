@@ -1,30 +1,29 @@
-const { metadata } = require('../db/models');
-const debug = require('debug')('sc2:server');
+const db = require('../helpers/db');
 
-/** Get user_metadata */
-const getUserMetadata = async (proxy, user) => {
+const getUserMetadata = async (clientId, username) => {
   try {
-    const userMetadata = await metadata.findOne({
-      attributes: ['user_metadata'],
-      where: { client_id: proxy, user },
-    });
-    if (userMetadata) {
-      return JSON.parse(userMetadata.user_metadata);
-    }
-  } catch (error) {
-    debug('getUserMetadata failed', error);
-    throw new Error(error);
+    const query = 'SELECT metadata FROM metadata WHERE client_id = ? AND username = ? LIMIT 1';
+    const result = await db.queryAsync(query, [clientId, username]);
+    if (result[0]) return JSON.parse(result[0].metadata);
+  } catch (e) {
+    console.error('Failed to get user metadata', JSON.stringify(e));
+    throw new Error(e);
   }
   return {};
 };
 
-/** Update user_metadata */
-const updateUserMetadata = async (proxy, user, newMetadata) => {
+const updateUserMetadata = async (clientId, username, metadata) => {
   try {
-    await metadata.upsert({ user_metadata: JSON.stringify(newMetadata), client_id: proxy, user });
-  } catch (error) {
-    debug('updateUserMetadata failed', error);
-    throw new Error(error);
+    const params = {
+      client_id: clientId,
+      username,
+      metadata: JSON.stringify(metadata),
+    };
+    const query = 'REPLACE INTO metadata SET ?';
+    await db.query(query, [params]);
+  } catch (e) {
+    console.error('Failed to update user metadata', JSON.stringify(e));
+    throw new Error(e);
   }
 };
 

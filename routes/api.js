@@ -1,13 +1,14 @@
 const express = require('express');
-const { authenticate, verifyPermissions } = require('../helpers/middleware');
-const client = require('../helpers/client');
 const { encode } = require('@steemit/steem-js/lib/auth/memo');
 const { tokens } = require('../db/models');
+const { authenticate, verifyPermissions } = require('../helpers/middleware');
 const { issueUserToken } = require('../helpers/token');
 const { getUserMetadata, updateUserMetadata } = require('../helpers/metadata');
 const { getErrorMessage, isOperationAuthor, getAppProfile } = require('../helpers/utils');
-const config = require('../config.json');
+const client = require('../helpers/client');
 const redis = require('../helpers/redis');
+const metadataApps = require('../helpers/metadata.json');
+const config = require('../config.json');
 
 const router = express.Router(); // eslint-disable-line new-cap
 
@@ -81,16 +82,20 @@ router.all('/me', authenticate(), async (req, res) => {
     res.status(501).send('SteemAPI request failed');
     return;
   }
-  let userMetadata;
-  try {
-    userMetadata = req.role === 'app'
-      ? await getUserMetadata(req.proxy, req.user)
-      : undefined;
-  } catch (err) {
-    console.error(`Get user metadata of @${req.user} failed`, err);
-    res.status(501).send('request failed');
-    return;
+
+  let userMetadata = null;
+  if (metadataApps.includes(req.proxy)) {
+    try {
+      userMetadata = req.role === 'app'
+        ? await getUserMetadata(req.proxy, req.user)
+        : undefined;
+    } catch (err) {
+      console.error(`Get user metadata of @${req.user} failed`, err);
+      res.status(501).send('request failed');
+      return;
+    }
   }
+
   res.json({
     user: req.user,
     _id: req.user,
@@ -153,7 +158,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
         } else {
           console.log(
             `Transaction broadcast failed for @${req.user}`,
-            JSON.stringify(operations), JSON.stringify(err)
+            getErrorMessage(err) || err.message || null,
           );
           res.status(500).json({
             error: 'server_error',

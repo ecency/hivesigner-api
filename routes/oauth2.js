@@ -1,8 +1,8 @@
 const express = require('express');
 const debug = require('debug')('sc2:server');
 const { tokens } = require('../db/models');
-const { issueAppToken, issueAppCode, issueAppRefreshToken } = require('../helpers/token');
 const { authenticate } = require('../helpers/middleware');
+const { issueAppToken, issueAppCode, issueAppRefreshToken } = require('../helpers/token');
 const config = require('../config.json');
 
 const router = express.Router(); // eslint-disable-line new-cap
