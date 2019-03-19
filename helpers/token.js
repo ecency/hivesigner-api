@@ -1,7 +1,8 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const debug = require('debug')('sc2:server');
 const { PublicKey, cryptoUtils, Signature } = require('dsteem');
 const client = require('./client');
+const db = require('./db');
 const { tokens } = require('../db/models');
 const config = require('../config.json');
 
@@ -25,7 +26,18 @@ const issueAppToken = async (proxy, user, scope = []) => {
 
   try {
     await tokens.create({ client_id: proxy, user, token });
-    debug(`A token for user @${user} with ${proxy} as proxy has been saved on database.`);
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expiration = parseInt(new Date().getTime() / 1000, 10) + config.token_expiration;
+    const mysqlToken = {
+      token_hash: tokenHash,
+      client_id: proxy,
+      username: user,
+      expiration,
+    };
+    await db.queryAsync('REPLACE INTO token SET ?', mysqlToken);
+
+    console.log(`A token for user @${user} with ${proxy} as proxy has been saved on database.`);
   } catch (error) {
     throw new Error(error);
   }

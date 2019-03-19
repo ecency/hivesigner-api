@@ -1,5 +1,4 @@
 const express = require('express');
-const debug = require('debug')('sc2:server');
 const { tokens } = require('../db/models');
 const { authenticate } = require('../helpers/middleware');
 const { issueAppToken, issueAppCode, issueAppRefreshToken } = require('../helpers/token');
@@ -13,12 +12,19 @@ router.all('/authorize', authenticate('user'), async (req, res) => {
   const scope = req.query.scope ? req.query.scope.split(',') : [];
 
   if (responseType === 'code') {
-    debug(`Issue app code for user @${req.user} using @${clientId} proxy.`);
+    console.log(`Issue app code for user @${req.user} using @${clientId} proxy.`);
     const code = issueAppCode(clientId, req.user, scope);
     res.json({ code });
   } else {
-    debug(`Issue app token for user @${req.user} using @${clientId} proxy.`);
-    const accessToken = await issueAppToken(clientId, req.user, scope);
+    console.log(`Issue app token for user @${req.user} using @${clientId} proxy.`);
+
+    let accessToken;
+    try {
+      accessToken = await issueAppToken(clientId, req.user, scope);
+    } catch (e) {
+      console.error('Unable to issue app token on authorize', e);
+    }
+
     res.json({
       access_token: accessToken,
       expires_in: config.token_expiration,
@@ -29,8 +35,15 @@ router.all('/authorize', authenticate('user'), async (req, res) => {
 
 /** Request app access token */
 router.all('/token', authenticate(['code', 'refresh']), async (req, res) => {
-  debug(`Issue app token for user @${req.user} using @${req.proxy} proxy.`);
-  const accessToken = await issueAppToken(req.proxy, req.user, req.scope);
+  console.log(`Issue app token for user @${req.user} using @${req.proxy} proxy.`);
+
+  let accessToken;
+  try {
+    accessToken = await issueAppToken(req.proxy, req.user, req.scope);
+  } catch (e) {
+    console.error('Unable to issue app token', e);
+  }
+
   const payload = {
     access_token: accessToken,
     expires_in: config.token_expiration,

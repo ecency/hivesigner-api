@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { intersection } = require('lodash');
+const isBase64 = require('is-base64');
+const { intersection, has } = require('lodash');
 const { tokens } = require('../db/models');
 const { verifySignature } = require('./token');
 const { getAppProfile } = require('./utils');
@@ -11,23 +12,35 @@ const client = require('./client');
  * And if app allow @steemconnect to post on his behalf
  */
 const verifyPermissions = async (req, res, next) => {
-  const accounts = await client.database.getAccounts([req.proxy, req.user]);
+  let accounts;
+  try {
+    accounts = await client.database.getAccounts([req.proxy, req.user]);
+  } catch (e) {
+    console.error('Unable to load accounts from steemd', req.proxy, req.user, e);
+  }
 
-  const userAccountAuths = accounts[1].posting.account_auths.map(account => account[0]);
-  if (userAccountAuths.indexOf(req.proxy) === -1) {
+  if (!has(accounts, '[0].name') || !has(accounts, '[1].name')) {
     res.status(401).json({
       error: 'unauthorized_client',
-      error_description: `The app @${req.proxy} doesn't have permission to broadcast for @${req.user}`,
+      error_description: `The app @${req.proxy} or user @${req.user} account failed to load`,
     });
   } else {
-    const appAccountAuths = accounts[0].posting.account_auths.map(account => account[0]);
-    if (appAccountAuths.indexOf(process.env.BROADCASTER_USERNAME) === -1) {
+    const userAccountAuths = accounts[1].posting.account_auths.map(account => account[0]);
+    if (userAccountAuths.indexOf(req.proxy) === -1) {
       res.status(401).json({
         error: 'unauthorized_client',
-        error_description: `Broadcaster account doesn't have permission to broadcast for @${req.proxy}`,
+        error_description: `The app @${req.proxy} doesn't have permission to broadcast for @${req.user}`,
       });
     } else {
-      next();
+      const appAccountAuths = accounts[0].posting.account_auths.map(account => account[0]);
+      if (appAccountAuths.indexOf(process.env.BROADCASTER_USERNAME) === -1) {
+        res.status(401).json({
+          error: 'unauthorized_client',
+          error_description: `Broadcaster account doesn't have permission to broadcast for @${req.proxy}`,
+        });
+      } else {
+        next();
+      }
     }
   }
 };
@@ -61,7 +74,7 @@ const strategy = (req, res, next) => {
     // console.log(e);
   }
 
-  if (!isJwt) {
+  if (!isJwt && isBase64(token)) {
     try {
       const decoded = Buffer.from(token, 'base64').toString();
       const tokenObj = JSON.parse(decoded);
@@ -99,7 +112,7 @@ const strategy = (req, res, next) => {
         next();
       }
     } catch (e) {
-      // console.log('Token signature decoding failed', e);
+      console.log('Token signature decoding failed', e);
       next();
     }
   } else {
@@ -121,7 +134,13 @@ const authenticate = roles => async (req, res, next) => {
       error_description: 'The token has invalid role',
     });
   } else if (req.role === 'app' && req.type === 'jwt') {
-    const token = await tokens.findOne({ where: { token: req.token } });
+    let token;
+    try {
+      token = await tokens.findOne({ where: { token: req.token } });
+    } catch (e) {
+      console.error('Enable to load token', e);
+    }
+
     if (!token) {
       res.status(401).json({
         error: 'invalid_grant',
@@ -131,7 +150,12 @@ const authenticate = roles => async (req, res, next) => {
       next();
     }
   } else if (req.role === 'code' || req.role === 'refresh') {
-    const app = await getAppProfile(req.proxy);
+    let app;
+    try {
+      app = await getAppProfile(req.proxy);
+    } catch (e) {
+      console.error('Failed to get app profile', e);
+    }
 
     const secret = req.query.client_secret || req.body.client_secret;
     const secretHash = crypto.createHash('sha256').update(secret).digest('hex');

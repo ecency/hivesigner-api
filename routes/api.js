@@ -145,7 +145,8 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       ['incr', `sc-api:broadcast:${month}-${year}`],
       ['incr', `sc-api:broadcast:@${req.proxy}`],
       ['incr', `sc-api:broadcast:@${req.proxy}:${month}-${year}`],
-    ]).execAsync();
+    ]).execAsync()
+      .catch(e => console.error('Failed to incr data on redis', e));
 
     /** Broadcast with Steem.js */
     req.steem.broadcast.send(
@@ -163,6 +164,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
           res.status(500).json({
             error: 'server_error',
             error_description: getErrorMessage(err) || err.message || err,
+            response: err,
           });
         }
       },
