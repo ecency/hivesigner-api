@@ -23,16 +23,16 @@ router.put('/me', authenticate('app'), async (req, res) => {
     res.status(501).send('SteemAPI request failed');
     return;
   }
-  const { user_metadata } = req.body;
+  const userMetadata = req.body.user_metadata;
 
-  if (typeof user_metadata === 'object') { // eslint-disable-line camelcase
+  if (typeof userMetadata === 'object') { // eslint-disable-line camelcase
     /** Check object size */
-    const bytes = Buffer.byteLength(JSON.stringify(user_metadata), 'utf8');
+    const bytes = Buffer.byteLength(JSON.stringify(userMetadata), 'utf8');
     if (bytes <= config.user_metadata.max_size) {
-      /** Save user_metadata object on database */
+      /** Save userMetadata object on database */
       console.log(`Store object for @${req.user} (size ${bytes} bytes)`);
       try {
-        await updateUserMetadata(req.proxy, req.user, user_metadata);
+        await updateUserMetadata(req.proxy, req.user, userMetadata);
       } catch (err) {
         console.error(`Update metadata of @${req.user} failed`, err);
         res.status(501).send('request failed');
@@ -55,7 +55,7 @@ router.put('/me', authenticate('app'), async (req, res) => {
         name: req.user,
         account: accounts[0],
         scope,
-        user_metadata,
+        user_metadata: userMetadata,
       });
       return;
     }

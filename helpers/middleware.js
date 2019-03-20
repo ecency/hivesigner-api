@@ -124,7 +124,7 @@ const authenticate = roles => async (req, res, next) => {
   let role = roles;
   if (Array.isArray(roles)) {
     if (req.role && roles.includes(req.role)) {
-      role = req.role;
+      role = req.role; // eslint-disable-line prefer-destructuring
     }
   }
 

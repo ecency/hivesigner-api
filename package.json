@@ -3,9 +3,7 @@
   "version": "0.1.0",
   "scripts": {
     "start": "node start.js",
-    "test": "npm run lint",
-    "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js'",
-    "eslint-fix": "eslint --fix 'routes/**/*.js' 'helpers/**/*.js' '*.js'"
+    "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js'"
   },
   "dependencies": {
     "@steemit/steem-js": "^0.7.4",
@@ -13,6 +11,7 @@
     "body-parser": "^1.18.3",
     "connection-string": "^1.0.1",
     "cors": "^2.8.5",
+    "dotenv": "^7.0.0",
     "dsteem": "^0.11.2",
     "express": "^4.16.4",
     "is-base64": "^0.1.0",
@@ -22,9 +21,12 @@
     "redis": "^2.8.0"
   },
   "devDependencies": {
-    "babel-eslint": "^10.0.1",
-    "eslint": "^5.14.1",
+    "babel-core": "^6.26.3",
+    "eslint": "^5.15.3",
     "eslint-config-airbnb": "^17.1.0",
-    "eslint-plugin-import": "^2.16.0"
+    "eslint-config-prettier": "^4.1.0",
+    "eslint-plugin-import": "^2.16.0",
+    "eslint-plugin-prettier": "^3.0.1",
+    "prettier": "^1.16.4"
   }
 }

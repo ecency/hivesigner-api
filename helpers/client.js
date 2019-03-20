@@ -10,7 +10,7 @@ client.customPrepareTx = (operations, wif) => new Promise((resolve, reject) => {
       expiration: new Date(Date.now() + expireTime).toISOString().slice(0, -5),
       extensions: [],
       operations,
-      ref_block_num: props.head_block_number & 0xFFFF,
+      ref_block_num: props.head_block_number & 0xFFFF, // eslint-disable-line no-bitwise
       ref_block_prefix: Buffer.from(props.head_block_id, 'hex').readUInt32LE(4),
     };
     const signedTx = client.broadcast.sign(tx, key);

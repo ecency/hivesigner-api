@@ -1,3 +1,4 @@
+/* eslint-disable prefer-promise-reject-errors */
 const Promise = require('bluebird');
 const { get, has } = require('lodash');
 const client = require('./client');
