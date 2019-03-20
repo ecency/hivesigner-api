@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 const { PublicKey, cryptoUtils, Signature } = require('dsteem');
 const client = require('./client');
 const db = require('./db');
-const { tokens } = require('../db/models');
 const config = require('../config.json');
 
 /** Create a new access token for user */
@@ -25,8 +24,6 @@ const issueAppToken = async (proxy, user, scope = []) => {
   );
 
   try {
-    await tokens.create({ client_id: proxy, user, token });
-
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const expiration = parseInt(new Date().getTime() / 1000, 10) + config.token_expiration;
     const mysqlToken = {
@@ -36,6 +33,7 @@ const issueAppToken = async (proxy, user, scope = []) => {
       expiration,
     };
     await db.queryAsync('REPLACE INTO token SET ?', mysqlToken);
+    await db.queryAsync('DELETE FROM token WHERE expiration < ?', parseInt(new Date().getTime() / 1000, 10));
 
     console.log(`A token for user @${user} with ${proxy} as proxy has been saved on database.`);
   } catch (error) {

@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const isBase64 = require('is-base64');
 const { intersection, has } = require('lodash');
-const { tokens } = require('../db/models');
+const db = require('./db');
 const { verifySignature } = require('./token');
 const { getAppProfile } = require('./utils');
 const client = require('./client');
@@ -136,7 +136,8 @@ const authenticate = roles => async (req, res, next) => {
   } else if (req.role === 'app' && req.type === 'jwt') {
     let token;
     try {
-      token = await tokens.findOne({ where: { token: req.token } });
+      const tokenHash = crypto.createHash('sha256').update(req.token).digest('hex');
+      [token] = await db.queryAsync('SELECT * FROM token WHERE token_hash = ? LIMIT 1', [tokenHash]);
     } catch (e) {
       console.error('Enable to load token', e);
     }

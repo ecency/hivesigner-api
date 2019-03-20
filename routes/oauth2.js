@@ -1,5 +1,6 @@
 const express = require('express');
-const { tokens } = require('../db/models');
+const crypto = require('crypto');
+const db = require('../helpers/db');
 const { authenticate } = require('../helpers/middleware');
 const { issueAppToken, issueAppCode, issueAppRefreshToken } = require('../helpers/token');
 const config = require('../config.json');
@@ -55,10 +56,17 @@ router.all('/token', authenticate(['code', 'refresh']), async (req, res) => {
   res.json(payload);
 });
 
-/** Revoke app access token */
+/** Revoke access token */
 router.all('/token/revoke', authenticate('app'), async (req, res) => {
-  await tokens.destroy({ where: { token: req.token } });
-  res.json({ success: true });
+  const tokenHash = crypto.createHash('sha256').update(req.token).digest('hex');
+  db.queryAsync('DELETE FROM token WHERE token_hash = ?', [tokenHash]).then(() => {
+    res.json({ success: true });
+  }).catch(() => {
+    res.status(500).json({
+      error: 'server_error',
+      error_description: 'Failed to revoke access token',
+    });
+  });
 });
 
 module.exports = router;

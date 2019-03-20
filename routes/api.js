@@ -1,6 +1,6 @@
 const express = require('express');
 const { encode } = require('@steemit/steem-js/lib/auth/memo');
-const { tokens } = require('../db/models');
+const db = require('../helpers/db');
 const { authenticate, verifyPermissions } = require('../helpers/middleware');
 const { issueUserToken } = require('../helpers/token');
 const { getUserMetadata, updateUserMetadata } = require('../helpers/metadata');
@@ -241,7 +241,13 @@ router.all('/token/revoke/:type/:clientId?', authenticate('user'), async (req, r
     (type === 'user' && (where.user || where.client_id))
     || (type === 'app' && where.client_id)
   ) {
-    await tokens.destroy({ where });
+    if (where.user && !where.client_id) {
+      await db.queryAsync('DELETE FROM token WHERE username = ?', [where.user]);
+    } else if (!where.user && where.client_id) {
+      await db.queryAsync('DELETE FROM token WHERE client_id = ?', [where.client_id]);
+    } else if (where.user && where.client_id) {
+      await db.queryAsync('DELETE FROM token WHERE username = ? AND client_id = ?', [where.user, where.client_id]);
+    }
   }
 
   res.json({ success: true });
