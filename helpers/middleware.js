@@ -92,6 +92,7 @@ const strategy = (req, res, next) => {
         const message = JSON.stringify({
           signed_message: signedMessage,
           authors: tokenObj.authors,
+          timestamp: tokenObj.timestamp,
         });
         const username = tokenObj.authors[0];
         verifySignature(message, username, tokenObj.signatures[0], (err, isValid) => {
