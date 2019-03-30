@@ -5,7 +5,7 @@ const Promise = require('bluebird');
 const parse = require('connection-string');
 
 const config = parse(process.env.DATABASE_URL);
-config.connectionLimit = 140;
+config.connectionLimit = 50;
 config.multipleStatements = true;
 [config.database] = config.path;
 config.host = config.hosts[0].name;
