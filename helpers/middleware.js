@@ -6,6 +6,7 @@ const db = require('./db');
 const { verifySignature } = require('./token');
 const { getAppProfile } = require('./utils');
 const client = require('./client');
+const config = require('../config.json');
 
 /**
  * Check if user allow app proxy account to post on his behalf
@@ -86,7 +87,7 @@ const strategy = (req, res, next) => {
         && tokenObj.signatures[0]
         && signedMessage
         && signedMessage.type
-        && signedMessage.type === 'login'
+        && ['login', 'posting', 'offline'].includes(signedMessage.type)
         && signedMessage.app
       ) {
         const message = JSON.stringify({
@@ -98,12 +99,19 @@ const strategy = (req, res, next) => {
         verifySignature(message, username, tokenObj.signatures[0], (err, isValid) => {
           if (!err && isValid) {
             console.log('Token signature is valid', username);
+            let scope;
+            if (signedMessage.type === 'login') scope = ['login'];
+            if (signedMessage.type === 'posting') scope = config.authorized_operations;
+            if (signedMessage.type === 'offline') {
+              scope = config.authorized_operations;
+              scope.push('offline');
+            }
             /* eslint-disable no-param-reassign */
             req.token = token;
             req.role = 'app';
             req.user = username;
             req.proxy = signedMessage.app;
-            req.scope = ['login'];
+            req.scope = scope;
             req.type = 'signature';
             /* eslint-enable no-param-reassign */
           }
