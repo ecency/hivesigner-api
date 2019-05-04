@@ -87,7 +87,7 @@ const strategy = (req, res, next) => {
         && tokenObj.signatures[0]
         && signedMessage
         && signedMessage.type
-        && ['login', 'posting', 'offline'].includes(signedMessage.type)
+        && ['login', 'posting', 'offline', 'code'].includes(signedMessage.type)
         && signedMessage.app
       ) {
         const message = JSON.stringify({
@@ -101,14 +101,16 @@ const strategy = (req, res, next) => {
             console.log('Token signature is valid', username);
             let scope;
             if (signedMessage.type === 'login') scope = ['login'];
-            if (signedMessage.type === 'posting') scope = config.authorized_operations;
+            if (['posting', 'code'].includes(signedMessage.type)) scope = config.authorized_operations;
             if (signedMessage.type === 'offline') {
               scope = config.authorized_operations;
               scope.push('offline');
             }
+            let role = 'app';
+            if (signedMessage.type === 'code') role = 'code';
             /* eslint-disable no-param-reassign */
             req.token = token;
-            req.role = 'app';
+            req.role = role;
             req.user = username;
             req.proxy = signedMessage.app;
             req.scope = scope;
