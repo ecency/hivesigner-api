@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const steem = require('@steemit/steem-js');
+const steem = require('steem');
 const { strategy } = require('./helpers/middleware');
 
 const app = express();

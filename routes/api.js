@@ -1,5 +1,5 @@
 const express = require('express');
-const { encode } = require('@steemit/steem-js/lib/auth/memo');
+const { encode } = require('steem/lib/auth/memo');
 const db = require('../helpers/db');
 const { authenticate, verifyPermissions } = require('../helpers/middleware');
 const { issueUserToken } = require('../helpers/token');
