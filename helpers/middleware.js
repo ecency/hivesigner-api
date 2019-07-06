@@ -48,10 +48,8 @@ const verifyPermissions = async (req, res, next) => {
 
 const strategy = (req, res, next) => {
   let authorization = req.get('authorization');
-  if (authorization) {
-    authorization = authorization.replace(/^(Bearer|Basic)\s/, '').trim();
-  }
-  const token = authorization
+  if (authorization) authorization = authorization.replace(/^(Bearer|Basic)\s/, '').trim();
+  let token = authorization
     || req.query.access_token
     || req.body.access_token
     || req.query.code
@@ -74,6 +72,8 @@ const strategy = (req, res, next) => {
   } catch (e) {
     // console.log(e);
   }
+
+  if (!isJwt && token.slice(-2) !== '==') token = `${token}==`;
 
   if (!isJwt && isBase64(token)) {
     try {
