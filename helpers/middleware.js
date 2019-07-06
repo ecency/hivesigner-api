@@ -73,7 +73,7 @@ const strategy = (req, res, next) => {
     // console.log(e);
   }
 
-  if (!isJwt && token.slice(-2) !== '==') token = `${token}==`;
+  if (!isJwt && token && token.slice(-2) !== '==') token = `${token}==`;
 
   if (!isJwt && isBase64(token)) {
     try {
