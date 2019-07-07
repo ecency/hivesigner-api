@@ -4,7 +4,7 @@ const isBase64 = require('is-base64');
 const { intersection, has } = require('lodash');
 const db = require('./db');
 const { verifySignature } = require('./token');
-const { getAppProfile } = require('./utils');
+const { getAppProfile, b64uToB64 } = require('./utils');
 const client = require('./client');
 const config = require('../config.json');
 
@@ -49,7 +49,7 @@ const verifyPermissions = async (req, res, next) => {
 const strategy = (req, res, next) => {
   let authorization = req.get('authorization');
   if (authorization) authorization = authorization.replace(/^(Bearer|Basic)\s/, '').trim();
-  const token = authorization
+  let token = authorization
     || req.query.access_token
     || req.body.access_token
     || req.query.code
@@ -72,6 +72,8 @@ const strategy = (req, res, next) => {
   } catch (e) {
     // console.log(e);
   }
+
+  if (!isJwt) token = b64uToB64(token);
 
   if (!isJwt && isBase64(token)) {
     try {

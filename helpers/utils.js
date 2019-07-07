@@ -46,7 +46,15 @@ const getAppProfile = username => new Promise((resolve, reject) => {
   });
 });
 
+const b64uLookup = {
+  '/': '_', _: '/', '+': '-', '-': '+', '=': '.', '.': '='
+};
+const b64ToB64u = str => str.replace(/(\+|\/|=)/g, m => b64uLookup[m]);
+const b64uToB64 = str => str.replace(/(-|_|\.)/g, m => b64uLookup[m]);
+
 module.exports = {
+  b64uToB64,
+  b64ToB64u,
   getErrorMessage,
   isOperationAuthor,
   getAppProfile,
