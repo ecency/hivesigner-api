@@ -73,7 +73,7 @@ const strategy = (req, res, next) => {
     // console.log(e);
   }
 
-  if (!isJwt) token = b64uToB64(token);
+  if (!isJwt && token) token = b64uToB64(token);
 
   if (!isJwt && isBase64(token)) {
     try {
