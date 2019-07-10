@@ -6,27 +6,27 @@
     "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js'"
   },
   "dependencies": {
-    "bluebird": "^3.5.3",
-    "body-parser": "^1.18.3",
-    "connection-string": "^1.0.1",
+    "bluebird": "^3.5.5",
+    "body-parser": "^1.19.0",
+    "connection-string": "^2.6.0",
     "cors": "^2.8.5",
-    "dotenv": "^7.0.0",
+    "dotenv": "^8.0.0",
     "dsteem": "^0.11.2",
-    "express": "^4.16.4",
+    "express": "^4.17.1",
     "is-base64": "^0.1.0",
-    "jsonwebtoken": "^8.5.0",
+    "jsonwebtoken": "^8.5.1",
     "lodash": "^4.17.11",
-    "mysql": "^2.16.0",
+    "mysql": "^2.17.1",
     "redis": "^2.8.0",
     "steem": "^0.7.5"
   },
   "devDependencies": {
     "babel-core": "^6.26.3",
-    "eslint": "^5.15.3",
-    "eslint-config-airbnb": "^17.1.0",
-    "eslint-config-prettier": "^4.1.0",
-    "eslint-plugin-import": "^2.16.0",
-    "eslint-plugin-prettier": "^3.0.1",
-    "prettier": "^1.16.4"
+    "eslint": "^6.0.1",
+    "eslint-config-airbnb": "^17.1.1",
+    "eslint-config-prettier": "^6.0.0",
+    "eslint-plugin-import": "^2.18.0",
+    "eslint-plugin-prettier": "^3.1.0",
+    "prettier": "^1.18.2"
   }
 }

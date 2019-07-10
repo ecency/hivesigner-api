@@ -31,7 +31,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', require('./routes/api'));
 app.use('/api/oauth2', require('./routes/oauth2'));
 
+// eslint-disable-next-line consistent-return
+app.get('/oauth2/authorize', (req, res) => {
+  if (!req.query.scope || !req.query.scope.includes('offline')) return res.redirect(`https://beta.steemconnect.com${req.url}`);
+  res.redirect(`https://app.steemconnect.com${req.url}`);
+});
+
+// eslint-disable-next-line consistent-return
 app.get('/*', (req, res) => {
+  if (req.url === '/') return res.redirect('https://beta.steemconnect.com');
   res.redirect(`https://app.steemconnect.com${req.url}`);
 });
 

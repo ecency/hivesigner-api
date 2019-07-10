@@ -37,23 +37,18 @@ router.all('/authorize', authenticate('user'), async (req, res) => {
 /** Request app access token */
 router.all('/token', authenticate(['code', 'refresh']), async (req, res) => {
   console.log(`Issue app token for user @${req.user} using @${req.proxy} proxy.`);
-
   let accessToken;
   try {
     accessToken = await issueAppToken(req.proxy, req.user, req.scope);
   } catch (e) {
     console.error('Unable to issue app token', e);
   }
-
-  const payload = {
+  res.json({
     access_token: accessToken,
+    refresh_token: issueAppRefreshToken(req.proxy, req.user, req.scope),
     expires_in: config.token_expiration,
     username: req.user,
-  };
-  if (req.scope.includes('offline')) {
-    payload.refresh_token = issueAppRefreshToken(req.proxy, req.user, req.scope);
-  }
-  res.json(payload);
+  });
 });
 
 /** Revoke access token */

@@ -101,11 +101,7 @@ const strategy = (req, res, next) => {
             console.log('Token signature is valid', username);
             let scope;
             if (signedMessage.type === 'login') scope = ['login'];
-            if (signedMessage.type === 'posting') scope = config.authorized_operations;
-            if (['offline', 'code'].includes(signedMessage.type)) {
-              scope = config.authorized_operations;
-              scope.push('offline');
-            }
+            if (['posting', 'offline', 'code'].includes(signedMessage.type)) scope = config.authorized_operations;
             let role = 'app';
             if (signedMessage.type === 'code') role = 'code';
             /* eslint-disable no-param-reassign */
