@@ -5,7 +5,6 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const steem = require('steem');
 const { strategy } = require('./helpers/middleware');
-const legacy = require('./helpers/legacy.json');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -32,16 +31,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', require('./routes/api'));
 app.use('/api/oauth2', require('./routes/oauth2'));
 
-// eslint-disable-next-line consistent-return
-app.get('/oauth2/authorize', (req, res) => {
-  if (!legacy.includes(req.query.client_id)) return res.redirect(`https://beta.steemconnect.com${req.url}`);
-  res.redirect(`https://app.steemconnect.com${req.url}`);
-});
-
-// eslint-disable-next-line consistent-return
 app.get('/*', (req, res) => {
-  if (req.url === '/') return res.redirect('https://beta.steemconnect.com');
-  res.redirect(`https://app.steemconnect.com${req.url}`);
+  res.redirect(`https://beta.steemconnect.com${req.url}`);
 });
 
 app.listen(port, () => {
