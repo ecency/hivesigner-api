@@ -1,6 +1,10 @@
 {
   "name": "steemconnect-api",
   "version": "0.1.0",
+  "description": "Signer app for Steem",
+  "author": "Fabien Marino <fabien@bonustrack.co> (https://github.com/bonustrack)",
+  "homepage": "https://steemconnect.com",
+  "license": "MIT",
   "scripts": {
     "start": "node start.js",
     "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js'"
@@ -15,18 +19,22 @@
     "express": "^4.17.1",
     "is-base64": "^0.1.0",
     "jsonwebtoken": "^8.5.1",
-    "lodash": "^4.17.11",
+    "lodash": "^4.17.15",
     "mysql": "^2.17.1",
     "redis": "^2.8.0",
     "steem": "^0.7.5"
   },
   "devDependencies": {
     "babel-core": "^6.26.3",
-    "eslint": "^6.0.1",
+    "eslint": "^6.1.0",
     "eslint-config-airbnb": "^17.1.1",
     "eslint-config-prettier": "^6.0.0",
-    "eslint-plugin-import": "^2.18.0",
+    "eslint-plugin-import": "^2.18.2",
     "eslint-plugin-prettier": "^3.1.0",
     "prettier": "^1.18.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bonustrack/steemconnect-api.git"
   }
 }
