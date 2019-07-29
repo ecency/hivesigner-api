@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { PublicKey, cryptoUtils, Signature } = require('dsteem');
+const {
+  PublicKey,
+  PrivateKey,
+  cryptoUtils,
+  Signature,
+} = require('dsteem');
 const client = require('./client');
 const db = require('./db');
 const config = require('../config.json');
@@ -70,19 +75,32 @@ const issueAppRefreshToken = (proxy, user, scope = []) => (
   )
 );
 
+// eslint-disable-next-line consistent-return
 const verifySignature = (message, username, signature, cb) => {
+  const hash = cryptoUtils.sha256(message);
+
+  const broadcasterPrivKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
+  const broadcasterPubKey = broadcasterPrivKey.createPublic();
+  if (broadcasterPubKey.verify(hash, Signature.fromString(signature))) {
+    return cb(null, true);
+  }
+
   client.database.getAccounts([username]).then((accounts) => {
+    let signatureIsValid = false;
     if (accounts[0] && accounts[0].name) {
-      const hash = cryptoUtils.sha256(message);
-      let signatureIsValid = false;
-      ['owner', 'active', 'posting'].forEach((type) => {
+      ['posting', 'active', 'owner'].forEach((type) => {
         accounts[0][type].key_auths.forEach((key) => {
-          if (PublicKey.fromString(key[0]).verify(hash, Signature.fromString(signature))) {
+          if (
+            !signatureIsValid
+            && PublicKey.fromString(key[0]).verify(hash, Signature.fromString(signature))
+          ) {
             signatureIsValid = true;
           }
         });
       });
       cb(null, signatureIsValid);
+    } else {
+      cb('Request failed', null);
     }
   }).catch((e) => {
     console.log('Get accounts failed', e);
