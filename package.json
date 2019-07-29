@@ -1,7 +1,7 @@
 {
   "name": "steemconnect-api",
   "version": "0.1.0",
-  "description": "Signer app for Steem",
+  "description": "OAuth 2 posting API for Steem",
   "author": "Fabien Marino <fabien@bonustrack.co> (https://github.com/bonustrack)",
   "homepage": "https://steemconnect.com",
   "license": "MIT",
