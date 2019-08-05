@@ -1,10 +1,7 @@
 const express = require('express');
-const { encode } = require('steem/lib/auth/memo');
-const db = require('../helpers/db');
 const { authenticate, verifyPermissions } = require('../helpers/middleware');
-const { issueUserToken } = require('../helpers/token');
 const { getUserMetadata, updateUserMetadata } = require('../helpers/metadata');
-const { getErrorMessage, isOperationAuthor, getAppProfile } = require('../helpers/utils');
+const { getErrorMessage, isOperationAuthor } = require('../helpers/utils');
 const client = require('../helpers/client');
 const redis = require('../helpers/redis');
 const metadataApps = require('../helpers/metadata.json');
@@ -194,63 +191,6 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
     });
     */
   }
-});
-
-router.all('/login/challenge', async (req, res) => {
-  const { username } = req.query;
-  const role = ['posting', 'active', 'owner'].includes(req.query.role) ? req.query.role : 'posting';
-  const token = issueUserToken(username);
-  let accounts;
-  try {
-    accounts = await client.database.getAccounts([username]);
-  } catch (err) {
-    console.error(`Get account @${username} failed`, err);
-    res.status(501).send('SteemAPI request failed');
-    return;
-  }
-  const keyAuths = accounts[0][role].key_auths;
-  const codes = keyAuths.map(keyAuth => encode(process.env.BROADCASTER_POSTING_WIF, keyAuth[0], `#${token}`));
-  res.json({
-    username,
-    codes,
-  });
-});
-
-/**
-  Revoke app tokens for a user
-  If appId is not provided all the tokens for all the apps are revoked
-*/
-router.all('/token/revoke/:type/:clientId?', authenticate('user'), async (req, res) => {
-  const { clientId, type } = req.params;
-  const { user } = req;
-  const where = {};
-
-  if (type === 'app' && clientId) {
-    const app = await getAppProfile(clientId);
-    if (app.creator && app.creator === user) {
-      where.client_id = clientId;
-    }
-  } else if (type === 'user') {
-    where.user = user;
-    if (clientId) {
-      where.client_id = clientId;
-    }
-  }
-
-  if (
-    (type === 'user' && (where.user || where.client_id))
-    || (type === 'app' && where.client_id)
-  ) {
-    if (where.user && !where.client_id) {
-      await db.queryAsync('DELETE FROM token WHERE username = ?', [where.user]);
-    } else if (!where.user && where.client_id) {
-      await db.queryAsync('DELETE FROM token WHERE client_id = ?', [where.client_id]);
-    } else if (where.user && where.client_id) {
-      await db.queryAsync('DELETE FROM token WHERE username = ? AND client_id = ?', [where.user, where.client_id]);
-    }
-  }
-
-  res.json({ success: true });
 });
 
 module.exports = router;
