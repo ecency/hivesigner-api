@@ -2,7 +2,7 @@ const express = require('express');
 const { createHash } = require('crypto');
 const db = require('../helpers/db');
 const { authenticate } = require('../helpers/middleware');
-const { issueAppToken, issueAppRefreshToken } = require('../helpers/token');
+const { issue } = require('../helpers/token');
 const config = require('../config.json');
 
 const router = express.Router(); // eslint-disable-line new-cap
@@ -10,15 +10,9 @@ const router = express.Router(); // eslint-disable-line new-cap
 /** Request app access token */
 router.all('/token', authenticate(['code', 'refresh']), async (req, res) => {
   console.log(`Issue app token for user @${req.user} using @${req.proxy} proxy.`);
-  let accessToken;
-  try {
-    accessToken = await issueAppToken(req.proxy, req.user, req.scope);
-  } catch (e) {
-    console.error('Unable to issue app token', e);
-  }
   res.json({
-    access_token: accessToken,
-    refresh_token: issueAppRefreshToken(req.proxy, req.user, req.scope),
+    access_token: issue(req.proxy, req.user, 'posting'),
+    refresh_token: issue(req.proxy, req.user, 'refresh'),
     expires_in: config.token_expiration,
     username: req.user,
   });

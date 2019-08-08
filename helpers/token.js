@@ -1,5 +1,3 @@
-const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 const {
   PublicKey,
   PrivateKey,
@@ -7,54 +5,23 @@ const {
   Signature,
 } = require('dsteem');
 const client = require('./client');
-const db = require('./db');
-const config = require('../config.json');
+const { b64uEnc } = require('./utils');
 
-/** Create a new access token for application and store it on the database */
-const issueAppToken = async (proxy, user, scope = []) => {
-  const token = jwt.sign(
-    {
-      role: 'app', proxy, user, scope,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: config.token_expiration },
-  );
-
-  try {
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const expiration = parseInt(new Date().getTime() / 1000, 10) + config.token_expiration;
-    const mysqlToken = {
-      token_hash: tokenHash,
-      client_id: proxy,
-      username: user,
-      expiration,
-    };
-    await db.queryAsync('REPLACE INTO token SET ?', mysqlToken);
-    await db.queryAsync('DELETE FROM token WHERE expiration < ?', parseInt(new Date().getTime() / 1000, 10));
-
-    console.log(`A token for user @${user} with ${proxy} as proxy has been saved on database.`);
-  } catch (error) {
-    throw new Error(error);
-  }
-
-  return token;
+const issue = (app, author, type) => {
+  const message = {
+    signed_message: { type, app },
+    authors: [author],
+    timestamp: parseInt(new Date().getTime() / 1000, 10),
+  };
+  const hash = cryptoUtils.sha256(JSON.stringify(message));
+  const privateKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
+  const signature = privateKey.sign(hash).toString();
+  message.signatures = [signature];
+  return b64uEnc(JSON.stringify(message));
 };
 
-/**
- * Create a refresh token for application, it can be used to obtain a renewed
- * access token. Refresh tokens never expire
- */
-const issueAppRefreshToken = (proxy, user, scope = []) => (
-  jwt.sign(
-    {
-      role: 'refresh', proxy, user, scope,
-    },
-    process.env.JWT_SECRET,
-  )
-);
-
 // eslint-disable-next-line consistent-return
-const verifySignature = (message, username, signature, cb) => {
+const verify = (message, username, signature, cb) => {
   const hash = cryptoUtils.sha256(message);
 
   const broadcasterPrivKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
@@ -87,7 +54,6 @@ const verifySignature = (message, username, signature, cb) => {
 };
 
 module.exports = {
-  issueAppToken,
-  issueAppRefreshToken,
-  verifySignature,
+  issue,
+  verify,
 };

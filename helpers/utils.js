@@ -51,8 +51,12 @@ const b64uLookup = {
 };
 const b64ToB64u = str => str.replace(/(\+|\/|=)/g, m => b64uLookup[m]);
 const b64uToB64 = str => str.replace(/(-|_|\.)/g, m => b64uLookup[m]);
+const b64uEnc = str => Buffer.from(str).toString('base64').replace(/(\+|\/|=)/g, m => b64uLookup[m]);
+const b64uDec = str => Buffer.from(str.replace(/(-|_|\.)/g, m => b64uLookup[m]), 'base64').toString();
 
 module.exports = {
+  b64uEnc,
+  b64uDec,
   b64uToB64,
   b64ToB64u,
   getErrorMessage,

@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const isBase64 = require('is-base64');
 const { intersection, has } = require('lodash');
 const db = require('./db');
-const { verifySignature } = require('./token');
+const { verify } = require('./token');
 const { getAppProfile, b64uToB64 } = require('./utils');
 const client = require('./client');
 const config = require('../config.json');
@@ -87,7 +87,8 @@ const strategy = (req, res, next) => {
         && tokenObj.signatures[0]
         && signedMessage
         && signedMessage.type
-        && ['login', 'posting', 'offline', 'code'].includes(signedMessage.type)
+        && ['login', 'posting', 'offline', 'code', 'refresh']
+          .includes(signedMessage.type)
         && signedMessage.app
       ) {
         const message = JSON.stringify({
@@ -96,14 +97,16 @@ const strategy = (req, res, next) => {
           timestamp: tokenObj.timestamp,
         });
         const username = tokenObj.authors[0];
-        verifySignature(message, username, tokenObj.signatures[0], (err, isValid) => {
+        verify(message, username, tokenObj.signatures[0], (err, isValid) => {
           if (!err && isValid) {
             console.log('Token signature is valid', username);
             let scope;
             if (signedMessage.type === 'login') scope = ['login'];
-            if (['posting', 'offline', 'code'].includes(signedMessage.type)) scope = config.authorized_operations;
+            if (['posting', 'offline', 'code', 'refresh']
+              .includes(signedMessage.type)) scope = config.authorized_operations;
             let role = 'app';
             if (signedMessage.type === 'code') role = 'code';
+            if (signedMessage.type === 'refresh') role = 'refresh';
             /* eslint-disable no-param-reassign */
             req.token = token;
             req.role = role;
