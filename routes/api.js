@@ -2,7 +2,9 @@ const express = require('express');
 const { authenticate, verifyPermissions } = require('../helpers/middleware');
 const { getUserMetadata, updateUserMetadata } = require('../helpers/metadata');
 const { getErrorMessage, isOperationAuthor } = require('../helpers/utils');
+const { issue } = require('../helpers/token');
 const client = require('../helpers/client');
+const steem = require('../helpers/steem');
 const redis = require('../helpers/redis');
 const metadataApps = require('../helpers/metadata.json');
 const config = require('../config.json');
@@ -35,16 +37,6 @@ router.put('/me', authenticate('app'), async (req, res) => {
         res.status(501).send('request failed');
         return;
       }
-
-      /** Store global metadata update count per month and by app */
-      const month = new Date().getUTCMonth() + 1;
-      const year = new Date().getUTCFullYear();
-      redis.multi([
-        ['incr', 'sc-api:metadata'],
-        ['incr', `sc-api:metadata:${month}-${year}`],
-        ['incr', `sc-api:metadata:@${req.proxy}`],
-        ['incr', `sc-api:metadata:@${req.proxy}:${month}-${year}`],
-      ]).execAsync();
 
       res.json({
         user: req.user,
@@ -146,7 +138,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       .catch(e => console.error('Failed to incr data on redis', e));
 
     /** Broadcast with Steem.js */
-    req.steem.broadcast.send(
+    steem.broadcast.send(
       { operations, extensions: [] },
       { posting: process.env.BROADCASTER_POSTING_WIF },
       (err, result) => {
@@ -166,31 +158,23 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
         }
       },
     );
-
-    /** Sign and prepare tx with dsteem, broadcast with Steem.js
-    client.customPrepareTx(operations, process.env.BROADCASTER_POSTING_WIF).then((signedTx) => {
-      req.steem.api.broadcastTransactionSynchronousAsync(signedTx).then((result) => {
-        console.log(`Broadcast transaction for @${req.user} from app @${req.proxy}`);
-        res.json({ result });
-      }).catch((e) => {
-        console.log(
-          `Transaction broadcast failed for @${req.user}`,
-          JSON.stringify(operations), getErrorMessage(e) || e.message,
-        );
-        res.status(500).json({
-          error: 'server_error',
-          error_description: getErrorMessage(e) || e.message || e,
-        });
-      });
-    }).catch((e) => {
-      console.error('Prepare transaction failed', JSON.stringify(e));
-      res.status(500).json({
-        error: 'server_error',
-        error_description: getErrorMessage(e) || e.message || e,
-      });
-    });
-    */
   }
+});
+
+/** Request app access token */
+router.all('/oauth2/token', authenticate(['code', 'refresh']), async (req, res) => {
+  console.log(`Issue app token for user @${req.user} using @${req.proxy} proxy.`);
+  res.json({
+    access_token: issue(req.proxy, req.user, 'posting'),
+    refresh_token: issue(req.proxy, req.user, 'refresh'),
+    expires_in: config.token_expiration,
+    username: req.user,
+  });
+});
+
+/** Revoke access token */
+router.all('/oauth2/token/revoke', authenticate('app'), async (req, res) => {
+  res.json({ success: true });
 });
 
 module.exports = router;

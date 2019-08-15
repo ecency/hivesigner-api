@@ -1,8 +1,5 @@
-const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
-const isBase64 = require('is-base64');
+const { createHash } = require('crypto');
 const { intersection, has } = require('lodash');
-const db = require('./db');
 const { verify } = require('./token');
 const { getAppProfile, b64uToB64 } = require('./utils');
 const client = require('./client');
@@ -49,7 +46,7 @@ const verifyPermissions = async (req, res, next) => {
 const strategy = (req, res, next) => {
   let authorization = req.get('authorization');
   if (authorization) authorization = authorization.replace(/^(Bearer|Basic)\s/, '').trim();
-  let token = authorization
+  const token = authorization
     || req.query.access_token
     || req.body.access_token
     || req.query.code
@@ -57,27 +54,9 @@ const strategy = (req, res, next) => {
     || req.query.refresh_token
     || req.body.refresh_token;
 
-  let isJwt = false;
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    /* eslint-disable no-param-reassign */
-    req.token = token;
-    req.role = decoded.role;
-    req.user = decoded.user;
-    req.proxy = decoded.proxy;
-    req.scope = decoded.scope || [];
-    req.type = 'jwt';
-    isJwt = true;
-    /* eslint-enable no-param-reassign */
-  } catch (e) {
-    // console.log(e);
-  }
-
-  if (!isJwt && token) token = b64uToB64(token);
-
-  if (!isJwt && isBase64(token)) {
+  if (token) {
     try {
-      const decoded = Buffer.from(token, 'base64').toString();
+      const decoded = Buffer.from(b64uToB64(token), 'base64').toString();
       const tokenObj = JSON.parse(decoded);
       const signedMessage = tokenObj.signed_message;
       if (
@@ -131,36 +110,15 @@ const strategy = (req, res, next) => {
 };
 
 const authenticate = roles => async (req, res, next) => {
-  let role = roles;
-  if (Array.isArray(roles)) {
-    if (req.role && roles.includes(req.role)) {
-      role = req.role; // eslint-disable-line prefer-destructuring
-    }
-  }
+  const role = Array.isArray(roles) && req.role && roles.includes(req.role)
+    ? req.role : roles;
 
   if (!req.role || (role && req.role !== role)) {
     res.status(401).json({
       error: 'invalid_grant',
       error_description: 'The token has invalid role',
     });
-  } else if (req.role === 'app' && req.type === 'jwt') {
-    let token;
-    try {
-      const tokenHash = crypto.createHash('sha256').update(req.token).digest('hex');
-      [token] = await db.queryAsync('SELECT * FROM token WHERE token_hash = ? LIMIT 1', [tokenHash]);
-    } catch (e) {
-      console.error('Enable to load token', e);
-    }
-
-    if (!token) {
-      res.status(401).json({
-        error: 'invalid_grant',
-        error_description: 'The access_token has been revoked',
-      });
-    } else {
-      next();
-    }
-  } else if (req.role === 'code' || req.role === 'refresh') {
+  } else if (['code', 'refresh'].includes(req.role)) {
     let app;
     try {
       app = await getAppProfile(req.proxy);
@@ -169,7 +127,7 @@ const authenticate = roles => async (req, res, next) => {
     }
 
     const secret = req.query.client_secret || req.body.client_secret;
-    const secretHash = crypto.createHash('sha256').update(secret).digest('hex');
+    const secretHash = createHash('sha256').update(secret).digest('hex');
 
     if (!app.secret || secretHash !== app.secret) {
       res.status(401).json({
