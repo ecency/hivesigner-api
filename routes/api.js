@@ -68,10 +68,10 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       { posting: process.env.BROADCASTER_POSTING_WIF },
       (err, result) => {
         if (!err) {
-          console.log(`Broadcasted transaction for @${req.user} from app @${req.proxy}`);
+          console.log(`Broadcasted: success for @${req.user} from app @${req.proxy}`);
           res.json({ result });
         } else {
-          console.log(`Transaction broadcast failed for @${req.user}`, JSON.stringify(err));
+          console.log(`Broadcasted: failed for @${req.user} from app @${req.proxy}`, JSON.stringify(req.body), JSON.stringify(err));
           res.status(500).json({
             error: 'server_error',
             error_description: getErrorMessage(err) || err.message || err,
