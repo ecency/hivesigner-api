@@ -23,14 +23,14 @@ const verifyPermissions = async (req, res, next) => {
       error_description: `The app @${req.proxy} or user @${req.user} account failed to load`,
     });
   } else {
-    const userAccountAuths = accounts[1].posting.account_auths.map(account => account[0]);
+    const userAccountAuths = accounts[1].posting.account_auths.map((account) => account[0]);
     if (userAccountAuths.indexOf(req.proxy) === -1) {
       res.status(401).json({
         error: 'unauthorized_client',
         error_description: `The app @${req.proxy} doesn't have permission to broadcast for @${req.user}`,
       });
     } else {
-      const appAccountAuths = accounts[0].posting.account_auths.map(account => account[0]);
+      const appAccountAuths = accounts[0].posting.account_auths.map((account) => account[0]);
       if (appAccountAuths.indexOf(process.env.BROADCASTER_USERNAME) === -1) {
         res.status(401).json({
           error: 'unauthorized_client',
@@ -109,7 +109,7 @@ const strategy = (req, res, next) => {
   }
 };
 
-const authenticate = roles => async (req, res, next) => {
+const authenticate = (roles) => async (req, res, next) => {
   const role = Array.isArray(roles) && req.role && roles.includes(req.role)
     ? req.role : roles;
 

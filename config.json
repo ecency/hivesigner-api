@@ -7,8 +7,5 @@
     "comment_options",
     "custom_json",
     "claim_reward_balance"
-  ],
-  "user_metadata": {
-    "max_size": 16000000
-  }
+  ]
 }

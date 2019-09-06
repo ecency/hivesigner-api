@@ -2,7 +2,15 @@
 const Promise = require('bluebird');
 const { get, has } = require('lodash');
 const client = require('./client');
-const operationAuthor = require('./operation-author.json');
+
+const operationAuthor = {
+  vote: 'voter',
+  comment: 'author',
+  delete_comment: 'author',
+  custom_json: 'required_posting_auths[0]',
+  comment_options: 'author',
+  claim_reward_balance: 'account',
+};
 
 /** Parse error message from Steemd response */
 const getErrorMessage = (error) => {
@@ -28,7 +36,7 @@ const isOperationAuthor = (operation, query, username) => {
   return false;
 };
 
-const getAppProfile = username => new Promise((resolve, reject) => {
+const getAppProfile = (username) => new Promise((resolve, reject) => {
   client.database.getAccounts([username]).then((accounts) => {
     let metadata;
     try {
@@ -49,10 +57,10 @@ const getAppProfile = username => new Promise((resolve, reject) => {
 const b64uLookup = {
   '/': '_', _: '/', '+': '-', '-': '+', '=': '.', '.': '=',
 };
-const b64ToB64u = str => str.replace(/(\+|\/|=)/g, m => b64uLookup[m]);
-const b64uToB64 = str => str.replace(/(-|_|\.)/g, m => b64uLookup[m]);
-const b64uEnc = str => Buffer.from(str).toString('base64').replace(/(\+|\/|=)/g, m => b64uLookup[m]);
-const b64uDec = str => Buffer.from(str.replace(/(-|_|\.)/g, m => b64uLookup[m]), 'base64').toString();
+const b64ToB64u = (str) => str.replace(/(\+|\/|=)/g, (m) => b64uLookup[m]);
+const b64uToB64 = (str) => str.replace(/(-|_|\.)/g, (m) => b64uLookup[m]);
+const b64uEnc = (str) => Buffer.from(str).toString('base64').replace(/(\+|\/|=)/g, (m) => b64uLookup[m]);
+const b64uDec = (str) => Buffer.from(str.replace(/(-|_|\.)/g, (m) => b64uLookup[m]), 'base64').toString();
 
 module.exports = {
   b64uEnc,
