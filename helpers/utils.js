@@ -10,6 +10,7 @@ const operationAuthor = {
   custom_json: 'required_posting_auths[0]',
   comment_options: 'author',
   claim_reward_balance: 'account',
+  account_update2: 'account',
 };
 
 /** Parse error message from Steemd response */

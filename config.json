@@ -6,6 +6,7 @@
     "delete_comment",
     "comment_options",
     "custom_json",
-    "claim_reward_balance"
+    "claim_reward_balance",
+    "account_update2"
   ]
 }

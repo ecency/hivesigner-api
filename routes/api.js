@@ -50,6 +50,12 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
     if (!isOperationAuthor(operation[0], operation[1], req.user)) {
       requestIsValid = false;
     }
+    if (
+      operation[0] === 'account_update2'
+      && (operation[1].owner || operation[1].active || operation[1].posting)
+    ) {
+      requestIsValid = false;
+    }
   });
 
   if (!scopeIsValid) {
@@ -71,7 +77,11 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
           console.log(`Broadcasted: success for @${req.user} from app @${req.proxy}`);
           res.json({ result });
         } else {
-          console.log(`Broadcasted: failed for @${req.user} from app @${req.proxy}`, JSON.stringify(req.body), JSON.stringify(err));
+          console.log(
+            `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
+            JSON.stringify(req.body),
+            JSON.stringify(err),
+          );
           res.status(500).json({
             error: 'server_error',
             error_description: getErrorMessage(err) || err.message || err,
