@@ -7,14 +7,14 @@ const config = require('../config.json');
 
 /**
  * Check if user allow app proxy account to post on his behalf
- * And if app allow @steemconnect to post on his behalf
+ * And if app allow @hivesigner to post on his behalf
  */
 const verifyPermissions = async (req, res, next) => {
   let accounts;
   try {
     accounts = await client.database.getAccounts([req.proxy, req.user]);
   } catch (e) {
-    console.error('Unable to load accounts from steemd', req.proxy, req.user, e);
+    console.error('Unable to load accounts from hived', req.proxy, req.user, e);
   }
 
   if (!has(accounts, '[0].name') || !has(accounts, '[1].name')) {

@@ -13,7 +13,7 @@ const operationAuthor = {
   account_update2: 'account',
 };
 
-/** Parse error message from Steemd response */
+/** Parse error message from hived response */
 const getErrorMessage = (error) => {
   let errorMessage = '';
   if (has(error, 'data.stack[0].format')) {

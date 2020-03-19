@@ -1,9 +1,8 @@
 {
-  "name": "steemconnect-api",
-  "version": "0.1.0",
-  "description": "OAuth 2 posting API for Steem",
-  "author": "Fabien Marino <fabien@bonustrack.co> (https://github.com/bonustrack)",
-  "homepage": "https://steemconnect.com",
+  "name": "hivesigner-api",
+  "version": "0.1.1",
+  "description": "OAuth 2 posting API for Hive",
+  "homepage": "https://hivesigner.com",
   "license": "MIT",
   "scripts": {
     "start": "node start.js",
@@ -30,6 +29,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/bonustrack/steemconnect-api.git"
+    "url": "https://github.com/ledgerconnect/hivesigner-api.git"
   }
 }

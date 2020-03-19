@@ -18,7 +18,7 @@ router.all('/me', authenticate(), async (req, res) => {
     console.error(`Get account @${req.user} failed`, err);
     return res.status(501).json({
       error: 'server_error',
-      error_description: 'Request to Steemd API failed',
+      error_description: 'Request to hived API failed',
     });
   }
 
