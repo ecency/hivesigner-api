@@ -3,7 +3,7 @@ const {
   PrivateKey,
   cryptoUtils,
   Signature,
-} = require('@hivechain/dsteem');
+} = require('dsteem');
 const client = require('./client');
 const { b64uEnc } = require('./utils');
 
