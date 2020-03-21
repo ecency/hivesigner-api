@@ -14,10 +14,10 @@
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
     "dotenv": "^8.1.0",
-    "dsteem": "^0.11.3",
     "express": "^4.17.1",
     "lodash": "^4.17.15",
-    "steem-js-patched": "^1.0.0"
+    "steem-js-patched": "^1.0.0",
+    "verror": "1.10.0"
   },
   "devDependencies": {
     "babel-core": "^6.26.3",
