@@ -3,7 +3,7 @@ const {
   PrivateKey,
   cryptoUtils,
   Signature,
-} = require('dhive');
+} = require('dsteem');
 const client = require('./client');
 const { b64uEnc } = require('./utils');
 
