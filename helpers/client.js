@@ -1,4 +1,4 @@
-const { Client } = require('@hivechain/dsteem');
+const { Client } = require('@hivechain/dhive');
 
 const client = new Client(process.env.STEEMD_URL || 'https://api.hive.blog');
 

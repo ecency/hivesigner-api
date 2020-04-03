@@ -1,6 +1,6 @@
 {
   "name": "hivesigner-api",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OAuth 2 posting API for Hive",
   "homepage": "https://hivesigner.com",
   "license": "MIT",
@@ -9,7 +9,7 @@
     "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js' --fix"
   },
   "dependencies": {
-    "@hivechain/dsteem": "^0.12.12",
+    "@hivechain/dhive": "^0.13.3",
     "bluebird": "^3.5.5",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
