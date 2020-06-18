@@ -42,9 +42,8 @@ jobs:
         port: ${{ secrets.SSH_PORT }}
         envs: BROADCAST_URL,BROADCASTER_USERNAME,BROADCASTER_POSTING_WIF,API_PORT
         script: |
-          cd ~/hivesigner-api
+          cd ~/hsapi
           git pull origin master
           npm install
-          npm run build
           export PORT=$API_PORT
           pm2 restart api
