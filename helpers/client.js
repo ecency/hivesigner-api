@@ -1,5 +1,5 @@
-const { Client } = require('@hivechain/dhive');
+import { Client } from '@hiveio/dhive';
 
-const client = new Client(process.env.STEEMD_URL || 'https://api.hive.blog');
+const client = new Client(process.env.BROADCAST_URL || 'https://api.hive.blog');
 
-module.exports = client;
+export default client;

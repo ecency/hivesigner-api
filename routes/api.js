@@ -1,16 +1,16 @@
-const express = require('express');
-const { authenticate, verifyPermissions } = require('../helpers/middleware');
-const { getErrorMessage, isOperationAuthor } = require('../helpers/utils');
-const { issue } = require('../helpers/token');
-const client = require('../helpers/client');
-const steem = require('../helpers/steem');
-const config = require('../config.json');
+import { Router } from 'express';
+import { authenticate, verifyPermissions } from '../helpers/middleware';
+import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
+import { issue } from '../helpers/token';
+import client from '../helpers/client';
+import hivejs from '../helpers/hive';
+import { authorized_operations, token_expiration } from '../config.json';
 
-const router = express.Router();
+const router = Router();
 
 /** Get my account details */
 router.all('/me', authenticate(), async (req, res) => {
-  const scope = req.scope.length ? req.scope : config.authorized_operations;
+  const scope = req.scope.length ? req.scope : authorized_operations;
   let accounts;
   try {
     accounts = await client.database.getAccounts([req.user]);
@@ -34,7 +34,7 @@ router.all('/me', authenticate(), async (req, res) => {
 
 /** Broadcast transaction */
 router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, res) => {
-  const scope = req.scope.length ? req.scope : config.authorized_operations;
+  const scope = req.scope.length ? req.scope : authorized_operations;
   const { operations } = req.body;
 
   let scopeIsValid = true;
@@ -69,7 +69,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       error_description: `This access_token allow you to broadcast transaction only for the account @${req.user}`,
     });
   } else {
-    steem.broadcast.send(
+    hivejs.broadcast.send(
       { operations, extensions: [] },
       { posting: process.env.BROADCASTER_POSTING_WIF },
       (err, result) => {
@@ -100,7 +100,7 @@ router.all('/oauth2/token', authenticate(['code', 'refresh']), async (req, res) 
   res.json({
     access_token: issue(req.proxy, req.user, 'posting'),
     refresh_token: issue(req.proxy, req.user, 'refresh'),
-    expires_in: config.token_expiration,
+    expires_in: token_expiration,
     username: req.user,
   });
 });
@@ -110,4 +110,4 @@ router.all('/oauth2/token/revoke', authenticate('app'), async (req, res) => {
   res.json({ success: true });
 });
 
-module.exports = router;
+export default router;

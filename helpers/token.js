@@ -1,13 +1,10 @@
-const {
-  PublicKey,
-  PrivateKey,
-  cryptoUtils,
-  Signature,
-} = require('@hivechain/dhive');
-const client = require('./client');
-const { b64uEnc } = require('./utils');
+import {
+  PublicKey, PrivateKey, cryptoUtils, Signature,
+} from '@hiveio/dhive';
+import client from './client';
+import { b64uEnc } from './utils';
 
-const issue = (app, author, type) => {
+export const issue = (app, author, type) => {
   const message = {
     signed_message: { type, app },
     authors: [author],
@@ -21,7 +18,7 @@ const issue = (app, author, type) => {
 };
 
 // eslint-disable-next-line consistent-return
-const verify = (message, username, signature, cb) => {
+export const verify = (message, username, signature, cb) => {
   const hash = cryptoUtils.sha256(message);
 
   const broadcasterPrivKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
@@ -51,9 +48,4 @@ const verify = (message, username, signature, cb) => {
     console.log('Get accounts failed', e);
     cb(e, null);
   });
-};
-
-module.exports = {
-  issue,
-  verify,
 };
