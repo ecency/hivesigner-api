@@ -35,7 +35,7 @@ router.all('/me', authenticate(), async (req, res) => {
     }
   }
   // otherwise, fall back to reading from `json_metadata`
-  if (accounts[0] && (!metadata || !metadata.profile)) {
+  if (accounts[0] && accounts[0].json_metadata && (!metadata || !metadata.profile)) {
     try {
       metadata = JSON.parse(accounts[0].json_metadata)
     } catch (error) {
