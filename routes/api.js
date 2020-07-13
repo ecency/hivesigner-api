@@ -22,13 +22,22 @@ router.all('/me', authenticate(), async (req, res) => {
     });
   }
 
+  let metadata;
+  if (accounts[0]) {
+    try {
+      metadata = JSON.parse(accounts[0].json_metadata);
+    } catch(e) {
+      console.error(`Error parsing account json ${req.user}`, e); // error in parsing
+    }
+  }
+
   return res.json({
     user: req.user,
     _id: req.user,
     name: req.user,
     account: accounts[0],
     scope,
-    user_metadata: null,
+    user_metadata: metadata,
   });
 });
 
