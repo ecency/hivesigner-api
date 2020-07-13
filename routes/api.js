@@ -38,7 +38,7 @@ router.all('/me', authenticate(), async (req, res) => {
       try {
         metadata = JSON.parse(accounts[0].json_metadata)
       } catch (error) {
-        console.error(`Error parsing account json ${req.user}`, e); // error in parsing
+        console.error(`Error parsing account json ${req.user}`, error); // error in parsing
         metadata = {}
       }
     }
