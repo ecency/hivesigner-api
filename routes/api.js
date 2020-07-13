@@ -33,14 +33,14 @@ router.all('/me', authenticate(), async (req, res) => {
       console.error(`Error parsing account posting_json ${req.user}`, e); // error in parsing
       metadata = {};
     }
-    // otherwise, fall back to reading from `json_metadata`
-    if (!metadata || !metadata.profile) {
-      try {
-        metadata = JSON.parse(accounts[0].json_metadata)
-      } catch (error) {
-        console.error(`Error parsing account json ${req.user}`, error); // error in parsing
-        metadata = {}
-      }
+  }
+  // otherwise, fall back to reading from `json_metadata`
+  if (accounts[0] && (!metadata || !metadata.profile)) {
+    try {
+      metadata = JSON.parse(accounts[0].json_metadata)
+    } catch (error) {
+      console.error(`Error parsing account json ${req.user}`, error); // error in parsing
+      metadata = {}
     }
   }
 
