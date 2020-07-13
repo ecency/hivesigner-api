@@ -23,11 +23,24 @@ router.all('/me', authenticate(), async (req, res) => {
   }
 
   let metadata;
-  if (accounts[0]) {
+  if (accounts[0] && accounts[0].posting_json_metadata) {
     try {
-      metadata = JSON.parse(accounts[0].json_metadata);
+      metadata = JSON.parse(accounts[0].posting_json_metadata);
+      if (!metadata.profile || !metadata.profile.version) {
+        metadata = {};
+      }
     } catch(e) {
-      console.error(`Error parsing account json ${req.user}`, e); // error in parsing
+      console.error(`Error parsing account posting_json ${req.user}`, e); // error in parsing
+      metadata = {};
+    }
+    // otherwise, fall back to reading from `json_metadata`
+    if (!metadata || !metadata.profile) {
+      try {
+        metadata = JSON.parse(accounts[0].json_metadata)
+      } catch (error) {
+        console.error(`Error parsing account json ${req.user}`, e); // error in parsing
+        metadata = {}
+      }
     }
   }
 
