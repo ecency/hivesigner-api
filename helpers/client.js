@@ -1,7 +1,6 @@
-const { Client } = require('@hiveio/dhive');
+import { Client } from '@hiveio/dhive';
 
 const client = new Client(process.env.BROADCAST_URL || 'https://api.hive.blog');
-
 client.database.getVersion().then((res) => {
   if (res.blockchain_version !== '0.23.0') {
     // true: eclipse rebranded rpc nodes
@@ -9,5 +8,4 @@ client.database.getVersion().then((res) => {
     client.updateOperations(true);
   }
 });
-
-module.exports = client;
+export default client;

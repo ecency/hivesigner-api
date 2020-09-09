@@ -1,19 +1,17 @@
-const express = require('express');
-const dhive = require('@hiveio/dhive');
+import { Router } from 'express';
+import { PrivateKey } from '@hiveio/dhive';
+import { authenticate, verifyPermissions } from '../helpers/middleware';
+import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
+import { issue } from '../helpers/token';
+import client from '../helpers/client';
+import { authorized_operations, token_expiration } from '../config.json';
 
-const { authenticate, verifyPermissions } = require('../helpers/middleware');
-const { getErrorMessage, isOperationAuthor } = require('../helpers/utils');
-const { issue } = require('../helpers/token');
-const client = require('../helpers/client');
-const config = require('../config.json');
-
-const privateKey = dhive.PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
-
-const router = express.Router();
+const router = Router();
+const privateKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
 
 /** Get my account details */
 router.all('/me', authenticate(), async (req, res) => {
-  const scope = req.scope.length ? req.scope : config.authorized_operations;
+  const scope = req.scope.length ? req.scope : authorized_operations;
   let accounts;
   try {
     accounts = await client.database.getAccounts([req.user]);
@@ -25,19 +23,41 @@ router.all('/me', authenticate(), async (req, res) => {
     });
   }
 
+  let metadata;
+  if (accounts[0] && accounts[0].posting_json_metadata) {
+    try {
+      metadata = JSON.parse(accounts[0].posting_json_metadata);
+      if (!metadata.profile || !metadata.profile.version) {
+        metadata = {};
+      }
+    } catch(e) {
+      console.error(`Error parsing account posting_json ${req.user}`, e); // error in parsing
+      metadata = {};
+    }
+  }
+  // otherwise, fall back to reading from `json_metadata`
+  if (accounts[0] && accounts[0].json_metadata && (!metadata || !metadata.profile)) {
+    try {
+      metadata = JSON.parse(accounts[0].json_metadata)
+    } catch (error) {
+      console.error(`Error parsing account json ${req.user}`, error); // error in parsing
+      metadata = {}
+    }
+  }
+
   return res.json({
     user: req.user,
     _id: req.user,
     name: req.user,
     account: accounts[0],
     scope,
-    user_metadata: null,
+    user_metadata: metadata,
   });
 });
 
 /** Broadcast transaction */
 router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, res) => {
-  const scope = req.scope.length ? req.scope : config.authorized_operations;
+  const scope = req.scope.length ? req.scope : authorized_operations;
   const { operations } = req.body;
 
   let scopeIsValid = true;
@@ -123,7 +143,7 @@ router.all('/oauth2/token', authenticate(['code', 'refresh']), async (req, res) 
   res.json({
     access_token: issue(req.proxy, req.user, 'posting'),
     refresh_token: issue(req.proxy, req.user, 'refresh'),
-    expires_in: config.token_expiration,
+    expires_in: token_expiration,
     username: req.user,
   });
 });
@@ -133,4 +153,4 @@ router.all('/oauth2/token/revoke', authenticate('app'), async (req, res) => {
   res.json({ success: true });
 });
 
-module.exports = router;
+export default router;

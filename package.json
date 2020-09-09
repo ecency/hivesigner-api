@@ -1,11 +1,11 @@
 {
   "name": "hivesigner-api",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "OAuth 2 posting API for Hive",
   "homepage": "https://hivesigner.com",
   "license": "MIT",
   "scripts": {
-    "start": "node start.js",
+    "start": "node -r esm start.js",
     "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js' --fix"
   },
   "dependencies": {
@@ -14,6 +14,7 @@
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
     "dotenv": "^8.1.0",
+    "esm": "^3.2.25",
     "express": "^4.17.1",
     "lodash": "^4.17.15",
     "redis": "^3.0.2",

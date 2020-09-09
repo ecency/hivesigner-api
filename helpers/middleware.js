@@ -1,15 +1,15 @@
-const { createHash } = require('crypto');
-const { intersection, has } = require('lodash');
-const { verify } = require('./token');
-const { getAppProfile, b64uToB64 } = require('./utils');
-const client = require('./client');
-const config = require('../config.json');
+import { createHash } from 'crypto';
+import { intersection, has } from 'lodash';
+import { verify } from './token';
+import { getAppProfile, b64uToB64 } from './utils';
+import client from './client';
+import { authorized_operations } from '../config.json';
 
 /**
  * Check if user allow app proxy account to post on his behalf
  * And if app allow @hivesigner to post on his behalf
  */
-const verifyPermissions = async (req, res, next) => {
+export const verifyPermissions = async (req, res, next) => {
   let accounts;
   try {
     accounts = await client.database.getAccounts([req.proxy, req.user]);
@@ -43,7 +43,7 @@ const verifyPermissions = async (req, res, next) => {
   }
 };
 
-const strategy = (req, res, next) => {
+export const strategy = (req, res, next) => {
   let authorization = req.get('authorization');
   if (authorization) authorization = authorization.replace(/^(Bearer|Basic)\s/, '').trim();
   const token = authorization
@@ -82,7 +82,7 @@ const strategy = (req, res, next) => {
             let scope;
             if (signedMessage.type === 'login') scope = ['login'];
             if (['posting', 'offline', 'code', 'refresh']
-              .includes(signedMessage.type)) scope = config.authorized_operations;
+              .includes(signedMessage.type)) scope = authorized_operations;
             let role = 'app';
             if (signedMessage.type === 'code') role = 'code';
             if (signedMessage.type === 'refresh') role = 'refresh';
@@ -109,7 +109,7 @@ const strategy = (req, res, next) => {
   }
 };
 
-const authenticate = (roles) => async (req, res, next) => {
+export const authenticate = (roles) => async (req, res, next) => {
   const role = Array.isArray(roles) && req.role && roles.includes(req.role)
     ? req.role : roles;
 
@@ -150,10 +150,4 @@ const authenticate = (roles) => async (req, res, next) => {
   } else {
     next();
   }
-};
-
-module.exports = {
-  verifyPermissions,
-  strategy,
-  authenticate,
 };
