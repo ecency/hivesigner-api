@@ -1,10 +1,13 @@
 const express = require('express');
+const dhive = require('@hiveio/dhive');
+
 const { authenticate, verifyPermissions } = require('../helpers/middleware');
 const { getErrorMessage, isOperationAuthor } = require('../helpers/utils');
 const { issue } = require('../helpers/token');
 const client = require('../helpers/client');
-const steem = require('../helpers/steem');
 const config = require('../config.json');
+
+const privateKey = dhive.PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
 
 const router = express.Router();
 
@@ -69,7 +72,27 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       error_description: `This access_token allow you to broadcast transaction only for the account @${req.user}`,
     });
   } else {
-    steem.broadcast.send(
+    client.broadcast.sendOperations(operations, privateKey)
+      .then(
+        function(result) {
+          console.log(new Date().toISOString(), `Broadcasted: success for @${req.user} from app @${req.proxy}`);
+          res.json({ result });
+        },
+        function(err) {
+          console.log(
+            new Date().toISOString(),
+            `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
+            JSON.stringify(req.body),
+            JSON.stringify(err),
+          );
+          res.status(500).json({
+            error: 'server_error',
+            error_description: getErrorMessage(err) || err.message || err,
+            response: err,
+          });
+        }
+      );
+    /*steem.broadcast.send(
       { operations, extensions: [] },
       { posting: process.env.BROADCASTER_POSTING_WIF },
       (err, result) => {
@@ -90,7 +113,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
           });
         }
       },
-    );
+    );*/
   }
 });
 

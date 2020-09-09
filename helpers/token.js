@@ -3,7 +3,7 @@ const {
   PrivateKey,
   cryptoUtils,
   Signature,
-} = require('@hivechain/dhive');
+} = require('@hiveio/dhive');
 const client = require('./client');
 const { b64uEnc } = require('./utils');
 
