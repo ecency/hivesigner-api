@@ -40,15 +40,30 @@ export const isOperationAuthor = (operation, query, username) => {
 export const getAppProfile = (username) => new Promise((resolve, reject) => {
   client.database.getAccounts([username]).then((accounts) => {
     let metadata;
-    try {
-      metadata = JSON.parse(accounts[0].json_metadata);
-      if (metadata.profile && metadata.profile.type && metadata.profile.type === 'app') {
-        resolve(metadata.profile);
-      } else {
-        reject(`The account @${username} is not an application`);
+    if (accounts[0] && accounts[0].posting_json_metadata) {
+      try {
+        metadata = JSON.parse(accounts[0].posting_json_metadata);
+        if (!metadata.profile || !metadata.profile.version) {
+          metadata = {};
+        }
+      } catch(e) {
+        console.error(`Error parsing account posting_json ${username}`, e); // error in parsing
+        metadata = {};
       }
-    } catch (e) {
-      reject(`Failed to parse account @${username} "json_metadata"`);
+    }
+    // otherwise, fall back to reading from `json_metadata`
+    if (accounts[0] && accounts[0].json_metadata && (!metadata || !metadata.profile)) {
+      try {
+        metadata = JSON.parse(accounts[0].json_metadata)
+      } catch (error) {
+        console.error(`Error parsing account json ${username}`, error); // error in parsing
+        metadata = {}
+      }
+    }
+    if (metadata.profile && metadata.profile.type && metadata.profile.type === 'app') {
+      resolve(metadata.profile);
+    } else {
+      reject(`The account @${username} is not an application`);
     }
   }).catch((e) => {
     reject(`Failed to load account @${username}`, e);
