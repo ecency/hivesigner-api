@@ -79,6 +79,10 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
     ) {
       requestIsValid = false;
     }
+    if (operation[1].__config || operation[1].__rshares) {
+      delete operation[1].__config;
+      delete operation[1].__rshares;
+    }
   });
 
   if (!scopeIsValid) {
