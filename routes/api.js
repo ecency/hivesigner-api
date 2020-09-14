@@ -80,8 +80,8 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       requestIsValid = false;
     }
     if (operation[0] === 'custom_json') {
-      if (!('required_auth' in operation[1])) {
-        operation[1].required_auth = [];
+      if (!('required_auths' in operation[1])) {
+        operation[1].required_auths = [];
       }
       if (!('required_posting_auths' in operation[1])) {
         operation[1].required_posting_auths = [];
