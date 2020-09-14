@@ -46,7 +46,7 @@ export const getAppProfile = (username) => new Promise((resolve, reject) => {
         if (!metadata.profile || !metadata.profile.version) {
           metadata = {};
         }
-      } catch(e) {
+      } catch (e) {
         console.error(`Error parsing account posting_json ${username}`, e); // error in parsing
         metadata = {};
       }
@@ -54,10 +54,10 @@ export const getAppProfile = (username) => new Promise((resolve, reject) => {
     // otherwise, fall back to reading from `json_metadata`
     if (accounts[0] && accounts[0].json_metadata && (!metadata || !metadata.profile)) {
       try {
-        metadata = JSON.parse(accounts[0].json_metadata)
+        metadata = JSON.parse(accounts[0].json_metadata);
       } catch (error) {
         console.error(`Error parsing account json ${username}`, error); // error in parsing
-        metadata = {}
+        metadata = {};
       }
     }
     if (metadata.profile && metadata.profile.type && metadata.profile.type === 'app') {

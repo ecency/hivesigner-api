@@ -30,7 +30,7 @@ router.all('/me', authenticate(), async (req, res) => {
       if (!metadata.profile || !metadata.profile.version) {
         metadata = {};
       }
-    } catch(e) {
+    } catch (e) {
       console.error(`Error parsing account posting_json ${req.user}`, e); // error in parsing
       metadata = {};
     }
@@ -38,10 +38,10 @@ router.all('/me', authenticate(), async (req, res) => {
   // otherwise, fall back to reading from `json_metadata`
   if (accounts[0] && accounts[0].json_metadata && (!metadata || !metadata.profile)) {
     try {
-      metadata = JSON.parse(accounts[0].json_metadata)
+      metadata = JSON.parse(accounts[0].json_metadata);
     } catch (error) {
       console.error(`Error parsing account json ${req.user}`, error); // error in parsing
-      metadata = {}
+      metadata = {};
     }
   }
 
@@ -94,11 +94,11 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
   } else {
     client.broadcast.sendOperations(operations, privateKey)
       .then(
-        function(result) {
+        (result) => {
           console.log(new Date().toISOString(), `Broadcasted: success for @${req.user} from app @${req.proxy}`);
           res.json({ result });
         },
-        function(err) {
+        (err) => {
           console.log(
             new Date().toISOString(),
             `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
@@ -110,7 +110,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
             error_description: getErrorMessage(err) || err.message || err,
             response: err,
           });
-        }
+        },
       );
   }
 });
