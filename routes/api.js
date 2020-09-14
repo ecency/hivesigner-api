@@ -112,28 +112,6 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
           });
         }
       );
-    /*steem.broadcast.send(
-      { operations, extensions: [] },
-      { posting: process.env.BROADCASTER_POSTING_WIF },
-      (err, result) => {
-        if (!err) {
-          console.log(new Date().toISOString(), `Broadcasted: success for @${req.user} from app @${req.proxy}`);
-          res.json({ result });
-        } else {
-          console.log(
-            new Date().toISOString(),
-            `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
-            JSON.stringify(req.body),
-            JSON.stringify(err),
-          );
-          res.status(500).json({
-            error: 'server_error',
-            error_description: getErrorMessage(err) || err.message || err,
-            response: err,
-          });
-        }
-      },
-    );*/
   }
 });
 
