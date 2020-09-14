@@ -79,6 +79,14 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
     ) {
       requestIsValid = false;
     }
+    if (operation[0] === 'custom_json') {
+      if (!('required_auth' in operation[1])) {
+        operation[1].required_auth = [];
+      }
+      if (!('required_posting_auths' in operation[1])) {
+        operation[1].required_posting_auths = [];
+      }
+    }
     if (operation[1].__config || operation[1].__rshares) {
       delete operation[1].__config;
       delete operation[1].__rshares;
