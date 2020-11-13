@@ -57,6 +57,7 @@ export const strategy = (req, res, next) => {
   if (token) {
     try {
       const decoded = Buffer.from(b64uToB64(token), 'base64').toString();
+      console.log(decoded);
       const tokenObj = JSON.parse(decoded);
       const signedMessage = tokenObj.signed_message;
       if (
