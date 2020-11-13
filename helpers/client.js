@@ -5,7 +5,7 @@ const DEFAULT_SERVER = [
   'https://rpc.ecency.com'
 ];
 
-const client = new Client([process.env.BROADCAST_URL, ...DEFAULT_SERVER], {
+const client = new Client(DEFAULT_SERVER, {
   timeout: 3000,
   failoverThreshold: 15,
   consoleOnFailover: true
