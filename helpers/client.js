@@ -2,8 +2,7 @@ import { Client } from '@hiveio/dhive';
 
 const DEFAULT_SERVER = [
   'https://api.hive.blog',
-  'https://api.deathwing.me',
-  'https://rpc.ausbit.dev'
+  'https://rpc.ecency.com'
 ];
 
 const client = new Client(DEFAULT_SERVER, {
