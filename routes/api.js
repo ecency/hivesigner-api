@@ -112,7 +112,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
         },
         (err) => {
           console.log(
-            new Date().toISOString(), client.currentAddress,
+            new Date().toISOString(), client.currentAddress, operations.toString(), 
             `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
             JSON.stringify(req.body),
             JSON.stringify(err),
