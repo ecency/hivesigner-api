@@ -1,8 +1,8 @@
 import { Client } from '@hiveio/dhive';
 
 const DEFAULT_SERVER = [
-  'https://api.hive.blog',
-  'https://rpc.ecency.com'
+  'https://rpc.ecency.com',
+  'https://api.hive.blog'
 ];
 
 const client = new Client(DEFAULT_SERVER, {

@@ -66,6 +66,7 @@ export const getAppProfile = (username) => new Promise((resolve, reject) => {
       reject(`The account @${username} is not an application`);
     }
   }).catch((e) => {
+    console.log(e);
     reject(`Failed to load account @${username}`, e);
   });
 });

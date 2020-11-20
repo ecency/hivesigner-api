@@ -58,7 +58,6 @@ export const strategy = (req, res, next) => {
     try {
       console.log(token);
       const decoded = Buffer.from(b64uToB64(token), 'base64').toString();
-      console.log(decoded);
       const tokenObj = JSON.parse(decoded);
       const signedMessage = tokenObj.signed_message;
       if (
@@ -103,7 +102,7 @@ export const strategy = (req, res, next) => {
         next();
       }
     } catch (e) {
-      console.log(new Date().toISOString(), 'Token signature decoding failed', e);
+      console.log(new Date().toISOString(), 'Token signature decoding failed', decoded);
       next();
     }
   } else {
