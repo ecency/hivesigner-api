@@ -107,12 +107,12 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
     client.broadcast.sendOperations(operations, privateKey)
       .then(
         (result) => {
-          console.log(new Date().toISOString(), `Broadcasted: success for @${req.user} from app @${req.proxy}`);
+          console.log(new Date().toISOString(), client.currentAddress, `Broadcasted: success for @${req.user} from app @${req.proxy}`);
           res.json({ result });
         },
         (err) => {
           console.log(
-            new Date().toISOString(),
+            new Date().toISOString(), client.currentAddress,
             `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
             JSON.stringify(req.body),
             JSON.stringify(err),
@@ -129,7 +129,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
 
 /** Request app access token */
 router.all('/oauth2/token', authenticate(['code', 'refresh']), async (req, res) => {
-  console.log(new Date().toISOString(), `Issue tokens for user @${req.user} for @${req.proxy} app.`);
+  console.log(new Date().toISOString(), client.currentAddress, `Issue tokens for user @${req.user} for @${req.proxy} app.`);
   res.json({
     access_token: issue(req.proxy, req.user, 'posting'),
     refresh_token: issue(req.proxy, req.user, 'refresh'),

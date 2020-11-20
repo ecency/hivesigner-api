@@ -79,7 +79,7 @@ export const strategy = (req, res, next) => {
         const username = tokenObj.authors[0];
         verify(message, username, tokenObj.signatures[0], (err, isValid) => {
           if (!err && isValid) {
-            console.log(new Date().toISOString(), 'Token signature is valid', username);
+            console.log(new Date().toISOString(), client.currentAddress, 'Token signature is valid', username);
             let scope;
             if (signedMessage.type === 'login') scope = ['login'];
             if (['posting', 'offline', 'code', 'refresh']
@@ -102,7 +102,7 @@ export const strategy = (req, res, next) => {
         next();
       }
     } catch (e) {
-      console.log(new Date().toISOString(), 'Token signature decoding failed', token);
+      console.log(new Date().toISOString(), client.currentAddress, 'Token signature decoding failed', token);
       next();
     }
   } else {
