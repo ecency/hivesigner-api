@@ -102,7 +102,7 @@ export const strategy = (req, res, next) => {
         next();
       }
     } catch (e) {
-      console.log(new Date().toISOString(), 'Token signature decoding failed', decoded);
+      console.log(new Date().toISOString(), 'Token signature decoding failed', token);
       next();
     }
   } else {
