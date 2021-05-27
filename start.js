@@ -1,9 +1,13 @@
 import express from 'express';
-import { join } from 'path';
+import path from 'path';
 import bparser from 'body-parser';
 const { json, urlencoded } = bparser;
 import cors from 'cors';
 import { strategy } from './helpers/middleware';
+
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.API_PORT || 3000;
@@ -20,7 +24,7 @@ app.use(json({ limit: '20mb' }));
 app.use(urlencoded({ limit: '20mb', extended: false }));
 app.use(cors());
 app.use(strategy);
-app.use(express.static(join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api', require('./routes/api').default);
 
