@@ -2,7 +2,7 @@ import express from 'express';
 import { join } from 'path';
 import { json, urlencoded } from 'body-parser';
 import cors from 'cors';
-import { strategy } from './helpers/middleware.js';
+import { strategy } from './helpers/middleware';
 
 const app = express();
 const port = process.env.API_PORT || 3000;

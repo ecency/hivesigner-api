@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { PrivateKey } from '@hiveio/dhive';
-import { authenticate, verifyPermissions } from '../helpers/middleware.js';
-import { getErrorMessage, isOperationAuthor } from '../helpers/utils.js';
-import { issue } from '../helpers/token.js';
-import client from '../helpers/client.js';
+import { authenticate, verifyPermissions } from '../helpers/middleware';
+import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
+import { issue } from '../helpers/token';
+import client from '../helpers/client';
 import { authorized_operations, token_expiration } from '../config.json';
 
 const router = Router();

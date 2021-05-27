@@ -1,7 +1,7 @@
 /* eslint-disable prefer-promise-reject-errors */
 import Promise from 'bluebird';
 import { get, has } from 'lodash';
-import client from './client.js';
+import client from './client';
 
 const operationAuthor = {
   vote: 'voter',

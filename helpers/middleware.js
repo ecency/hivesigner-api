@@ -1,8 +1,8 @@
 import { createHash } from 'crypto';
 import { intersection, has } from 'lodash';
-import { verify } from './token.js';
-import { getAppProfile, b64uToB64 } from './utils.js';
-import client from './client.js';
+import { verify } from './token';
+import { getAppProfile, b64uToB64 } from './utils';
+import client from './client';
 import { authorized_operations } from '../config.json';
 
 /**
