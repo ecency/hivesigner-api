@@ -4,7 +4,8 @@ const { intersection, has } = pkg;
 import { verify } from './token';
 import { getAppProfile, b64uToB64 } from './utils';
 import client from './client';
-import { authorized_operations } from '../config.json';
+import cjson from '../config.json';
+const { authorized_operations } = cjson;
 
 /**
  * Check if user allow app proxy account to post on his behalf

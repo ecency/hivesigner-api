@@ -4,7 +4,8 @@ import { authenticate, verifyPermissions } from '../helpers/middleware';
 import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
 import { issue } from '../helpers/token';
 import client from '../helpers/client';
-import { authorized_operations, token_expiration } from '../config.json';
+import cjson from '../config.json';
+const { authorized_operations, token_expiration } = cjson;
 
 const router = Router();
 const privateKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
