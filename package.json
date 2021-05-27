@@ -5,7 +5,7 @@
   "homepage": "https://hivesigner.com",
   "license": "MIT",
   "scripts": {
-    "start": "node -r esm start.js",
+    "start": "node --experimental-modules --experimental-json-modules start.js",
     "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js' --fix"
   },
   "dependencies": {
@@ -13,7 +13,6 @@
     "bluebird": "^3.5.5",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
-    "esm": "^3.2.25",
     "express": "^4.17.1",
     "lodash": "^4.17.15",
     "redis": "^3.0.2",

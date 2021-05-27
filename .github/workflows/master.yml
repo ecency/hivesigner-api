@@ -66,7 +66,7 @@ jobs:
         port: ${{ secrets.SSH_PORT }}
         envs: BROADCAST_NETWORK,BROADCASTER_USERNAME,BROADCASTER_POSTING_WIF,API_PORT
         script: |
-          cd ~/hsapi-testnet
+          cd ~/hsapi
           git pull origin master
           npm install
           export API_PORT=$API_PORT
