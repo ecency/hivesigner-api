@@ -1,6 +1,6 @@
 {
   "name": "hivesigner-api",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "OAuth 2 posting API for Hive",
   "homepage": "https://hivesigner.com",
   "license": "MIT",
