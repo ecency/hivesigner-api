@@ -1,6 +1,7 @@
 /* eslint-disable prefer-promise-reject-errors */
 import Promise from 'bluebird';
-import { get, has } from 'lodash';
+import pkg from 'lodash';
+const { get, has } = pkg;
 import client from './client';
 
 const operationAuthor = {
