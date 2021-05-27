@@ -1,6 +1,7 @@
 import express from 'express';
 import { join } from 'path';
-import { json, urlencoded } from 'body-parser';
+import bparser from 'body-parser';
+const { json, urlencoded } = bparser;
 import cors from 'cors';
 import { strategy } from './helpers/middleware';
 
