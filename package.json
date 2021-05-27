@@ -4,6 +4,7 @@
   "description": "OAuth 2 posting API for Hive",
   "homepage": "https://hivesigner.com",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "start": "node --experimental-modules --experimental-json-modules --es-module-specifier-resolution=node start.js",
     "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js' --fix"
