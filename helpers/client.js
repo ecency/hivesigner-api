@@ -17,6 +17,7 @@ const client = new Client(network === 'mainnet' ? DEFAULT_SERVER : DEFAULT_TESTN
   failoverThreshold: 5,
   consoleOnFailover: true,
   addressPrefix: network === 'mainnet' ? 'SMT' : 'TST',
+  chainId: network === 'mainnet' ? 'beeab0de00000000000000000000000000000000000000000000000000000000' : '18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e',
 });
 
 export default client;
