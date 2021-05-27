@@ -17,6 +17,7 @@
     "express": "^4.17.1",
     "lodash": "^4.17.15",
     "redis": "^3.0.2",
+    "url": "^0.11.0",
     "verror": "1.10.0"
   },
   "devDependencies": {
