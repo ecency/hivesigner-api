@@ -4,6 +4,7 @@ import bparser from 'body-parser';
 const { json, urlencoded } = bparser;
 import cors from 'cors';
 import { strategy } from './helpers/middleware';
+import apis from './routes/api';
 
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -26,7 +27,7 @@ app.use(cors());
 app.use(strategy);
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/api', require('./routes/api').default);
+app.use('/api', apis);
 
 app.get('/*', (req, res) => {
   res.redirect(`https://${process.env.BROADCAST_NETWORK==='mainnet'?'hivesigner.com':'testnet.hivesigner.com'}${req.url}`);
