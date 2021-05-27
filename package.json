@@ -5,7 +5,7 @@
   "homepage": "https://hivesigner.com",
   "license": "MIT",
   "scripts": {
-    "start": "node --experimental-modules --experimental-json-modules start.js",
+    "start": "node --experimental-modules --experimental-json-modules --es-module-specifier-resolution=node start.js",
     "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js' --fix"
   },
   "dependencies": {

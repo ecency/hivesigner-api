@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
-import { intersection, has } from 'lodash';
+import pkg from 'lodash';
+const { intersection, has } = pkg;
 import { verify } from './token';
 import { getAppProfile, b64uToB64 } from './utils';
 import client from './client';
