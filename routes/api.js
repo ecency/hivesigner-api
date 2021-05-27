@@ -5,6 +5,7 @@ import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
 import { issue } from '../helpers/token';
 import client from '../helpers/client';
 import cjson from '../config.json';
+
 const { authorized_operations, token_expiration } = cjson;
 
 const router = Router();
@@ -113,7 +114,7 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
         },
         (err) => {
           console.log(
-            new Date().toISOString(), client.currentAddress, operations.toString(), 
+            new Date().toISOString(), client.currentAddress, operations.toString(),
             `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
             JSON.stringify(req.body),
             JSON.stringify(err),

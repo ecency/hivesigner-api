@@ -1,10 +1,11 @@
 import { createHash } from 'crypto';
 import pkg from 'lodash';
-const { intersection, has } = pkg;
 import { verify } from './token';
 import { getAppProfile, b64uToB64 } from './utils';
 import client from './client';
 import cjson from '../config.json';
+
+const { intersection, has } = pkg;
 const { authorized_operations } = cjson;
 
 /**

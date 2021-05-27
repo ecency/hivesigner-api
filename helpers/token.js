@@ -22,7 +22,7 @@ export const verify = (message, username, signature, cb) => {
   const hash = cryptoUtils.sha256(message);
 
   const broadcasterPrivKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
-  const broadcasterPubKey = broadcasterPrivKey.createPublic(process.env.BROADCASTER_NETWORK==='mainnet' ? 'SMT' : 'TST');
+  const broadcasterPubKey = broadcasterPrivKey.createPublic(process.env.BROADCASTER_NETWORK === 'mainnet' ? 'SMT' : 'TST');
   if (broadcasterPubKey.verify(hash, Signature.fromString(signature))) {
     return cb(null, true);
   }

@@ -1,12 +1,12 @@
 import express from 'express';
 import path from 'path';
 import bparser from 'body-parser';
-const { json, urlencoded } = bparser;
 import cors from 'cors';
+import { fileURLToPath } from 'url';
 import { strategy } from './helpers/middleware';
 import apis from './routes/api';
 
-import { fileURLToPath } from 'url';
+const { json, urlencoded } = bparser;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -30,7 +30,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', apis);
 
 app.get('/*', (req, res) => {
-  res.redirect(`https://${process.env.BROADCAST_NETWORK==='mainnet'?'hivesigner.com':'testnet.hivesigner.com'}${req.url}`);
+  res.redirect(`https://${process.env.BROADCAST_NETWORK === 'mainnet' ? 'hivesigner.com' : 'testnet.hivesigner.com'}${req.url}`);
 });
 
 app.listen(port, () => {
