@@ -4,10 +4,8 @@ import { json, urlencoded } from 'body-parser';
 import cors from 'cors';
 import { strategy } from './helpers/middleware';
 
-require('dotenv').config();
-
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.API_PORT || 3000;
 
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -26,7 +24,7 @@ app.use(express.static(join(__dirname, 'public')));
 app.use('/api', require('./routes/api').default);
 
 app.get('/*', (req, res) => {
-  res.redirect(`https://hivesigner.com${req.url}`);
+  res.redirect(`https://${process.env.BROADCAST_NETWORK==='mainnet'?'hivesigner.com':'testnet.hivesigner.com'}${req.url}`);
 });
 
 app.listen(port, () => {
