@@ -70,4 +70,5 @@ jobs:
           git pull origin main
           npm install
           export API_PORT=$API_PORT
+          export BROADCAST_NETWORK=$BROADCAST_NETWORK
           pm2 reload testnet-api
