@@ -1,7 +1,6 @@
 import { Client } from '@hiveio/dhive';
 
 const DEFAULT_SERVER = [
-  'https://hived.emre.sh',
   'https://rpc.ecency.com',
   'https://api.deathwing.me',
   'https://rpc.ausbit.dev'
