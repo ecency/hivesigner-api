@@ -1,7 +1,7 @@
 import { Client } from '@hiveio/dhive';
 
 const DEFAULT_SERVER = [
-  'https://api.hive.blog'
+  'https://api.hive.blog',
   'https://api.deathwing.me',
   'https://rpc.ecency.com',
   'https://rpc.ausbit.dev'
