@@ -133,12 +133,12 @@ export const authenticate = (roles) => async (req, res, next) => {
     const secret = req.query.client_secret || req.body.client_secret;
     const secretHash = createHash('sha256').update(secret).digest('hex');
 
-    if (!app.secret || secretHash !== app.secret) {
+    if (app && (!app.secret || secretHash !== app.secret)) {
       res.status(401).json({
         error: 'invalid_grant',
         error_description: 'The code or secret is not valid',
       });
-    } else if (app.allowed_ips && app.allowed_ips.length > 0) {
+    } else if (app && app.allowed_ips && app.allowed_ips.length > 0) {
       const reqIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
       if (intersection(app.allowed_ips, reqIp.replace(' ', '').split(',')).length > 0) {
         next();
