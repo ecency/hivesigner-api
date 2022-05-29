@@ -3,8 +3,7 @@ import { Client } from '@hiveio/dhive';
 const DEFAULT_SERVER = [
   'https://rpc.ecency.com',
   'https://api.deathwing.me',
-  'https://api.hive.blog',
-  'https://rpc.ausbit.dev'
+  'https://hived.emre.sh'
 ];
 
 const DEFAULT_TESTNET_SERVER = [
