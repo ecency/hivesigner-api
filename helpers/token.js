@@ -1,7 +1,7 @@
 import {
   PublicKey, PrivateKey, cryptoUtils, Signature,
 } from '@hiveio/dhive';
-import {client, getAccount} from './client';
+import {getAccount} from './client';
 import { b64uEnc } from './utils';
 
 export const issue = (app, author, type) => {
