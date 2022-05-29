@@ -47,28 +47,3 @@ jobs:
           npm install
           export API_PORT=$API_PORT
           pm2 reload api
-
-  deploy-testnet:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-    - name: SSH and deploy node app
-      uses: appleboy/ssh-action@5711a203b3207eb1c6cebec6ac2152ab210ec3ae
-      env:
-        BROADCAST_NETWORK: ${{secrets.BROADCAST_NETWORK_TESTNET}}
-        BROADCASTER_USERNAME: ${{secrets.BROADCASTER_USERNAME}}
-        BROADCASTER_POSTING_WIF: ${{secrets.BROADCASTER_POSTING_WIF}}
-        API_PORT: ${{secrets.API_PORT_TESTNET}}
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USERNAME }}
-        key: ${{ secrets.SSH_KEY }}
-        port: ${{ secrets.SSH_PORT }}
-        envs: BROADCAST_NETWORK,BROADCASTER_USERNAME,BROADCASTER_POSTING_WIF,API_PORT
-        script: |
-          cd ~/hsapi
-          git pull origin main
-          npm install
-          export API_PORT=$API_PORT
-          export BROADCAST_NETWORK=$BROADCAST_NETWORK
-          pm2 reload testnet-api
