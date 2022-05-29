@@ -10,12 +10,13 @@
     "lint": "eslint 'routes/**/*.js' 'helpers/**/*.js' '*.js' --fix"
   },
   "dependencies": {
-    "@hiveio/dhive": "^1.0.1",
+    "@hiveio/dhive": "^1.2.0",
     "bluebird": "^3.5.5",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
     "express": "^4.17.1",
     "lodash": "^4.17.15",
+    "node-cache": "^5.1.2",
     "redis": "^3.0.2",
     "url": "^0.11.0",
     "verror": "1.10.0"

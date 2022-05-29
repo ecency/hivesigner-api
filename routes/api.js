@@ -3,7 +3,7 @@ import { PrivateKey } from '@hiveio/dhive';
 import { authenticate, verifyPermissions } from '../helpers/middleware';
 import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
 import { issue } from '../helpers/token';
-import client from '../helpers/client';
+import {client, bclient, getAccount} from '../helpers/client';
 import cjson from '../config.json';
 
 const { authorized_operations, token_expiration } = cjson;
@@ -16,7 +16,7 @@ router.all('/me', authenticate(), async (req, res) => {
   const scope = req.scope.length ? req.scope : authorized_operations;
   let accounts;
   try {
-    accounts = await client.database.getAccounts([req.user]);
+    accounts = await getAccount(req.user);
   } catch (err) {
     console.error(`Get account @${req.user} failed`, err);
     return res.status(501).json({
@@ -42,7 +42,7 @@ router.all('/me', authenticate(), async (req, res) => {
     try {
       metadata = JSON.parse(accounts[0].json_metadata);
     } catch (error) {
-      console.error(`Error parsing account json ${req.user}`, error); // error in parsing
+      console.error(new Date().toISOString(), `Error parsing account json ${req.user}`, error); // error in parsing
       metadata = {};
     }
   }
@@ -106,15 +106,15 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       error_description: `This access_token allow you to broadcast transaction only for the account @${req.user}`,
     });
   } else {
-    client.broadcast.sendOperations(operations, privateKey)
+    bclient.broadcast.sendOperations(operations, privateKey)
       .then(
         (result) => {
-          console.log(new Date().toISOString(), client.currentAddress, `Broadcasted: success for @${req.user} from app @${req.proxy}`);
+          console.log(new Date().toISOString(), bclient.currentAddress, `Broadcasted: success for @${req.user} from app @${req.proxy}`);
           res.json({ result });
         },
         (err) => {
           console.log(
-            new Date().toISOString(), client.currentAddress, operations.toString(),
+            new Date().toISOString(), bclient.currentAddress, operations.toString(),
             `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
             JSON.stringify(req.body),
             JSON.stringify(err),

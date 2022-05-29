@@ -1,7 +1,7 @@
 /* eslint-disable prefer-promise-reject-errors */
 import Promise from 'bluebird';
 import pkg from 'lodash';
-import client from './client';
+import {client, getAccount} from './client';
 
 const { get, has } = pkg;
 
@@ -40,7 +40,7 @@ export const isOperationAuthor = (operation, query, username) => {
 };
 
 export const getAppProfile = (username) => new Promise((resolve, reject) => {
-  client.database.getAccounts([username]).then((accounts) => {
+  getAccount(username).then((accounts) => {
     let metadata;
     if (accounts[0] && accounts[0].posting_json_metadata) {
       try {
@@ -49,7 +49,7 @@ export const getAppProfile = (username) => new Promise((resolve, reject) => {
           metadata = {};
         }
       } catch (e) {
-        console.error(`Error parsing account posting_json ${username}`, e); // error in parsing
+        console.error(new Date().toISOString(), client.currentAddress, `Error parsing account posting_json ${username}`, e); // error in parsing
         metadata = {};
       }
     }
@@ -58,7 +58,7 @@ export const getAppProfile = (username) => new Promise((resolve, reject) => {
       try {
         metadata = JSON.parse(accounts[0].json_metadata);
       } catch (error) {
-        console.error(`Error parsing account json ${username}`, error); // error in parsing
+        console.error(new Date().toISOString(), `Error parsing account json ${username}`, error); // error in parsing
         metadata = {};
       }
     }

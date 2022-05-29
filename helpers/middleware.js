@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import pkg from 'lodash';
 import { verify } from './token';
 import { getAppProfile, b64uToB64 } from './utils';
-import client from './client';
+import {client, getAccount} from './client';
 import cjson from '../config.json';
 
 const { intersection, has } = pkg;
@@ -13,27 +13,33 @@ const { authorized_operations } = cjson;
  * And if app allow @hivesigner to post on his behalf
  */
 export const verifyPermissions = async (req, res, next) => {
-  let accounts;
+  let proxyAccount;
+  let userAccount;
   try {
-    accounts = await client.database.getAccounts([req.proxy, req.user]);
+    proxyAccount = await getAccount(req.proxy);
   } catch (e) {
-    console.error('Unable to load accounts from hived', req.proxy, req.user, e);
+    console.error(new Date().toISOString(), client.currentAddress, 'Unable to load proxy account from hived', req.proxy, e);
+  }
+  try {
+    userAccount = await getAccount(req.user);
+  } catch (e) {
+    console.error(new Date().toISOString(), client.currentAddress, 'Unable to load user account from hived', req.user, e);
   }
 
-  if (!has(accounts, '[0].name') || !has(accounts, '[1].name')) {
+  if (!has(proxyAccount, '[0].name') || !has(userAccount, '[0].name')) {
     res.status(401).json({
       error: 'unauthorized_client',
       error_description: `The app @${req.proxy} or user @${req.user} account failed to load`,
     });
   } else {
-    const userAccountAuths = accounts[1].posting.account_auths.map((account) => account[0]);
+    const userAccountAuths = userAccount[0].posting.account_auths.map((account) => account[0]);
     if (userAccountAuths.indexOf(req.proxy) === -1) {
       res.status(401).json({
         error: 'unauthorized_client',
         error_description: `The app @${req.proxy} doesn't have permission to broadcast for @${req.user}`,
       });
     } else {
-      const appAccountAuths = accounts[0].posting.account_auths.map((account) => account[0]);
+      const appAccountAuths = proxyAccount[0].posting.account_auths.map((account) => account[0]);
       if (appAccountAuths.indexOf(process.env.BROADCASTER_USERNAME) === -1) {
         res.status(401).json({
           error: 'unauthorized_client',
@@ -127,7 +133,7 @@ export const authenticate = (roles) => async (req, res, next) => {
     try {
       app = await getAppProfile(req.proxy);
     } catch (e) {
-      console.error('Failed to get app profile', e);
+      console.error(new Date().toISOString(), 'Failed to get app profile', e);
     }
 
     const secret = req.query.client_secret || req.body.client_secret;

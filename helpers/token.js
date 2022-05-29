@@ -1,7 +1,7 @@
 import {
   PublicKey, PrivateKey, cryptoUtils, Signature,
 } from '@hiveio/dhive';
-import client from './client';
+import {client, getAccount} from './client';
 import { b64uEnc } from './utils';
 
 export const issue = (app, author, type) => {
@@ -27,7 +27,7 @@ export const verify = (message, username, signature, cb) => {
     return cb(null, true);
   }
 
-  client.database.getAccounts([username]).then((accounts) => {
+  getAccount(username).then((accounts) => {
     let signatureIsValid = false;
     if (accounts[0] && accounts[0].name) {
       ['posting', 'active', 'owner'].forEach((type) => {
