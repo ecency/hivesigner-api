@@ -21,7 +21,7 @@ export const verifyPermissions = async (req, res, next) => {
     console.error(new Date().toISOString(), client.currentAddress, 'Unable to load proxy account from hived', req.proxy, e);
   }
   try {
-    userAccount = await getAccount(req.user);
+    userAccount = await getAccount(req.user, false);
   } catch (e) {
     console.error(new Date().toISOString(), client.currentAddress, 'Unable to load user account from hived', req.user, e);
   }

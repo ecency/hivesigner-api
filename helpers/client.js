@@ -34,8 +34,8 @@ export const bclient = new Client(network === 'mainnet' ? broadcast_server : DEF
   chainId: network === 'mainnet' ? 'beeab0de00000000000000000000000000000000000000000000000000000000' : '18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e',
 });
 
-export const getAccount = async (user) => {
-  let account = cache.get(`${user}`);
+export const getAccount = async (user, isCached=true) => {
+  let account = isCached ? cache.get(`${user}`) : undefined;
   if (account === undefined) {
     try {
       account = await client.database.getAccounts([user]);
