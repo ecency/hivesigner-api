@@ -8,8 +8,8 @@ const DEFAULT_SERVER = [
 ];
 
 const broadcast_server = [
-  'https://rpc.ecency.com',
-  'https://api.deathwing.me'
+  'https://api.hive.blog',
+  'https://rpc.ecency.com'
 ];
 
 const DEFAULT_TESTNET_SERVER = [
