@@ -2,9 +2,8 @@ import { Client } from '@hiveio/dhive';
 import {cache} from './cache';
 
 const DEFAULT_SERVER = [
-  'https://hived.emre.sh',
   'https://api.deathwing.me',
-  'https://hive-api.arcange.eu'
+  'https://api.hive.blog'
 ];
 
 const broadcast_server = [

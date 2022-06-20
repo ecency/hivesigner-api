@@ -26,7 +26,7 @@ router.all('/me', authenticate(), async (req, res) => {
   }
 
   let metadata;
-  if (accounts[0] && accounts[0].posting_json_metadata) {
+  if (accounts && accounts.length>0 && accounts[0] && accounts[0].posting_json_metadata) {
     try {
       metadata = JSON.parse(accounts[0].posting_json_metadata);
       if (!metadata.profile || !metadata.profile.version) {
@@ -38,7 +38,7 @@ router.all('/me', authenticate(), async (req, res) => {
     }
   }
   // otherwise, fall back to reading from `json_metadata`
-  if (accounts[0] && accounts[0].json_metadata && (!metadata || !metadata.profile)) {
+  if (accounts && accounts.length>0 && accounts[0] && accounts[0].json_metadata && (!metadata || !metadata.profile)) {
     try {
       metadata = JSON.parse(accounts[0].json_metadata);
     } catch (error) {
