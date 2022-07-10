@@ -1,5 +1,5 @@
 import { Client } from '@hiveio/dhive';
-import { cache } from './cache';
+// import { cache } from './cache';
 
 const DEFAULT_SERVER = [
   'https://api.openhive.network',
@@ -36,11 +36,11 @@ export const bclient = new Client(network === 'mainnet' ? broadcast_server : DEF
 });
 
 export const getAccount = async (user, isCached = true) => {
-  let account = isCached ? cache.get(`${user}`) : undefined;
+  let account = isCached ? undefined : undefined; // cache.get(`${user}`)
   if (account === undefined) {
     try {
       account = await client.database.getAccounts([user]);
-      cache.set(`${user}`, account, 60);
+      // cache.set(`${user}`, account, 60);
     } catch (e) {
       console.error(new Date().toISOString(), client.currentAddress, 'Unable to load account from hived', user, e);
     }
