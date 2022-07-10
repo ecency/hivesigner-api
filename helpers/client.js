@@ -39,7 +39,7 @@ export const getAccount = async (user, isCached = true) => {
   if (account === undefined) {
     try {
       account = await client.database.getAccounts([user]);
-      cache.set(`${user}`, account, 600);
+      cache.set(`${user}`, account, 60);
     } catch (e) {
       console.error(new Date().toISOString(), client.currentAddress, 'Unable to load account from hived', user, e);
     }
