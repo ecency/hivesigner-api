@@ -1,6 +1,6 @@
 {
   "name": "hivesigner-api",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "OAuth 2 posting API for Hive",
   "homepage": "https://hivesigner.com",
   "license": "MIT",
@@ -33,6 +33,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ledgerconnect/hivesigner-api.git"
+    "url": "https://github.com/ecency/hivesigner-api.git"
   }
 }
