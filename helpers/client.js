@@ -1,14 +1,15 @@
 import { Client } from '@hiveio/dhive';
-import {cache} from './cache';
+import { cache } from './cache';
 
 const DEFAULT_SERVER = [
   'https://api.deathwing.me',
-  'https://api.hive.blog'
+  'https://api.hive.blog',
 ];
 
 const broadcast_server = [
+  'https://api.openhive.network',
   'https://rpc.ecency.com',
-  'https://api.deathwing.me'
+  'https://api.deathwing.me',
 ];
 
 const DEFAULT_TESTNET_SERVER = [
@@ -19,7 +20,7 @@ const network = process.env.BROADCAST_NETWORK || 'mainnet';
 
 export const client = new Client(network === 'mainnet' ? DEFAULT_SERVER : DEFAULT_TESTNET_SERVER, {
   timeout: 4000,
-  failoverThreshold: 5,
+  failoverThreshold: 4,
   consoleOnFailover: true,
   addressPrefix: network === 'mainnet' ? 'STM' : 'TST',
   chainId: network === 'mainnet' ? 'beeab0de00000000000000000000000000000000000000000000000000000000' : '18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e',
@@ -33,7 +34,7 @@ export const bclient = new Client(network === 'mainnet' ? broadcast_server : DEF
   chainId: network === 'mainnet' ? 'beeab0de00000000000000000000000000000000000000000000000000000000' : '18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e',
 });
 
-export const getAccount = async (user, isCached=true) => {
+export const getAccount = async (user, isCached = true) => {
   let account = isCached ? cache.get(`${user}`) : undefined;
   if (account === undefined) {
     try {
@@ -44,4 +45,4 @@ export const getAccount = async (user, isCached=true) => {
     }
   }
   return account;
-}
+};

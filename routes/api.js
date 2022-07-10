@@ -3,7 +3,7 @@ import { PrivateKey } from '@hiveio/dhive';
 import { authenticate, verifyPermissions } from '../helpers/middleware';
 import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
 import { issue } from '../helpers/token';
-import {client, bclient, getAccount} from '../helpers/client';
+import { client, bclient, getAccount } from '../helpers/client';
 import cjson from '../config.json';
 
 const { authorized_operations, token_expiration } = cjson;
@@ -26,7 +26,7 @@ router.all('/me', authenticate(), async (req, res) => {
   }
 
   let metadata;
-  if (accounts && accounts.length>0 && accounts[0] && accounts[0].posting_json_metadata) {
+  if (accounts && accounts.length > 0 && accounts[0] && accounts[0].posting_json_metadata) {
     try {
       metadata = JSON.parse(accounts[0].posting_json_metadata);
       if (!metadata.profile || !metadata.profile.version) {
@@ -38,7 +38,7 @@ router.all('/me', authenticate(), async (req, res) => {
     }
   }
   // otherwise, fall back to reading from `json_metadata`
-  if (accounts && accounts.length>0 && accounts[0] && accounts[0].json_metadata 
+  if (accounts && accounts.length > 0 && accounts[0] && accounts[0].json_metadata
     && (!metadata || !metadata.profile)) {
     try {
       metadata = JSON.parse(accounts[0].json_metadata);

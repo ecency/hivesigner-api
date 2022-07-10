@@ -1,7 +1,7 @@
 /* eslint-disable prefer-promise-reject-errors */
 import Promise from 'bluebird';
 import pkg from 'lodash';
-import {client, getAccount} from './client';
+import { client, getAccount } from './client';
 
 const { get, has } = pkg;
 

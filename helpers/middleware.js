@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import pkg from 'lodash';
 import { verify } from './token';
 import { getAppProfile, b64uToB64 } from './utils';
-import {client, getAccount} from './client';
+import { client, getAccount } from './client';
 import cjson from '../config.json';
 
 const { intersection, has } = pkg;
