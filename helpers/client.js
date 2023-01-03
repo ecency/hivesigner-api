@@ -2,15 +2,15 @@ import { Client } from '@hiveio/dhive';
 import { cache } from './cache';
 
 const DEFAULT_SERVER = [
-  'https://api.openhive.network',
   'https://api.deathwing.me',
   'https://rpc.ecency.com',
+  'https://api.openhive.network'
 ];
 
 const broadcast_server = [
-  'https://api.openhive.network',
   'https://rpc.ecency.com',
   'https://api.deathwing.me',
+  'https://api.openhive.network'  
 ];
 
 const DEFAULT_TESTNET_SERVER = [
