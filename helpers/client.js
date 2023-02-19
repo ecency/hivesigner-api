@@ -8,8 +8,8 @@ const DEFAULT_SERVER = [
 ];
 
 const broadcast_server = [
-  'https://api.deathwing.me',
   'https://rpc.ecency.com',
+  'https://api.deathwing.me',
   'https://api.openhive.network'  
 ];
 
