@@ -5,14 +5,14 @@ const DEFAULT_SERVER = [
   'https://rpc.ecency.com',
   'https://api.hive.blog',
   'https://api.deathwing.me',
-  'https://api.openhive.network'
+  'https://anyx.io'
 ];
 
 const broadcast_server = [
   'https://api.hive.blog',
   'https://rpc.ecency.com',
   'https://api.deathwing.me',
-  'https://api.openhive.network'  
+  'https://anyx.io'  
 ];
 
 const DEFAULT_TESTNET_SERVER = [
