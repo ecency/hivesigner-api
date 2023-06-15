@@ -62,11 +62,11 @@ export const strategy = (req, res, next) => {
     || req.body.code
     || req.query.refresh_token
     || req.body.refresh_token;
-  const memo = req.query.memo || req.body.memo || "";
+  const memo = req.query.memo || req.body.memo;
 
   if (token) {
     try {
-      console.log(token);
+      //console.log(token);
       const decoded = Buffer.from(b64uToB64(token), 'base64').toString();
       const tokenObj = JSON.parse(decoded);
       const signedMessage = tokenObj.signed_message;
@@ -104,7 +104,7 @@ export const strategy = (req, res, next) => {
             req.proxy = signedMessage.app;
             req.scope = scope;
             req.type = 'signature';
-            if (memo){
+            if (memo) {
               req.memo = memo;
             }
             /* eslint-enable no-param-reassign */
