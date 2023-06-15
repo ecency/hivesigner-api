@@ -1,8 +1,20 @@
 import {
-  PublicKey, PrivateKey, cryptoUtils, Signature,
+  PublicKey, PrivateKey, cryptoUtils, Signature, Memo,
 } from '@hiveio/dhive';
 import { getAccount } from './client';
 import { b64uEnc } from './utils';
+
+export const decodeMemo = (encodedMemo) => {
+  const privateKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
+  let rr = "";
+  try {
+    rr = Memo.decode(privateKey, encodedMemo);
+  } catch (error) {
+    console.log('Failed to decode', encodedMemo);
+    rr = ""
+  }
+  return rr;
+}
 
 export const issue = (app, author, type) => {
   const message = {

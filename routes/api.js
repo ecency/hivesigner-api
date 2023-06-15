@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrivateKey } from '@hiveio/dhive';
 import { authenticate, verifyPermissions } from '../helpers/middleware';
 import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
-import { issue } from '../helpers/token';
+import { decodeMemo, issue } from '../helpers/token';
 import { client, bclient, getAccount } from '../helpers/client';
 import cjson from '../config.json';
 
@@ -144,6 +144,14 @@ router.all('/oauth2/token', authenticate(['code', 'refresh']), async (req, res) 
 /** Revoke access token */
 router.all('/oauth2/token/revoke', authenticate('app'), async (req, res) => {
   res.json({ success: true });
+});
+
+/** decode memo */
+router.all('/decode', authenticate(), async (req, res) => {
+  res.json({
+    memo: decodeMemo(req.memo),
+    username: req.user,
+  });
 });
 
 export default router;

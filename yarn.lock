@@ -103,10 +103,10 @@
     "@babel/helper-validator-identifier" "^7.19.1"
     to-fast-properties "^2.0.0"
 
-"@hiveio/dhive@^1.2.5":
-  version "1.2.5"
-  resolved "https://registry.yarnpkg.com/@hiveio/dhive/-/dhive-1.2.5.tgz#0a888c4ab361b50181c217ad736e881e293a9a55"
-  integrity sha512-9D1kT+kWtQUoVkre9BQbfM13kC7f0a/OwS5QeDKeurZEeVIpr4pfTBwV2dTrym8fL7EMMscIQljxmc3fBSP5gA==
+"@hiveio/dhive@^1.2.6":
+  version "1.2.6"
+  resolved "https://registry.yarnpkg.com/@hiveio/dhive/-/dhive-1.2.6.tgz#0348ff35ea7000b81737ba60e1a4c8951cbb1e27"
+  integrity sha512-36Ahop62wlXw51XWseWPFKLqdmigAm0A3CM6yeAlaT3/uEiVQ4bjR40dzsUk6zUbEHQ2ELx32U00NufG5+yWjA==
   dependencies:
     bigi "^1.4.2"
     bs58 "^4.0.1"
