@@ -62,6 +62,7 @@ export const strategy = (req, res, next) => {
     || req.body.code
     || req.query.refresh_token
     || req.body.refresh_token;
+  const memo = req.query.memo || req.body.memo || "";
 
   if (token) {
     try {
@@ -103,6 +104,9 @@ export const strategy = (req, res, next) => {
             req.proxy = signedMessage.app;
             req.scope = scope;
             req.type = 'signature';
+            if (memo){
+              req.memo = memo;
+            }
             /* eslint-enable no-param-reassign */
           }
           next();

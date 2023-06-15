@@ -149,7 +149,7 @@ router.all('/oauth2/token/revoke', authenticate('app'), async (req, res) => {
 /** decode memo */
 router.all('/decode', authenticate(), async (req, res) => {
   res.json({
-    memo: decodeMemo(req.memo),
+    memo: req.memo?decodeMemo(req.memo):"",
     username: req.user,
   });
 });
