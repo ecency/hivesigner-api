@@ -59,9 +59,10 @@ router.all('/me', authenticate(), async (req, res) => {
 });
 
 /** decode memo */
-router.all('/decode', authenticate(), async (req, res) => {
+router.all('/decodeMemo', authenticate(), async (req, res) => {
+  let memoDecoded = await decodeMemo(req.memo);
   res.json({
-    memoDecoded: await decodeMemo(req.memo),
+    memoDecoded,
     username: req.user,
   });
 });
