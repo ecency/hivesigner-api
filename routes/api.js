@@ -58,6 +58,14 @@ router.all('/me', authenticate(), async (req, res) => {
   });
 });
 
+/** decode memo */
+router.all('/decode', authenticate(), async (req, res) => {
+  res.json({
+    memoDecoded: await decodeMemo(req.memo),
+    username: req.user,
+  });
+});
+
 /** Broadcast transaction */
 router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, res) => {
   const scope = req.scope.length ? req.scope : authorized_operations;
@@ -146,12 +154,5 @@ router.all('/oauth2/token/revoke', authenticate('app'), async (req, res) => {
   res.json({ success: true });
 });
 
-/** decode memo */
-router.all('/decode', authenticate(), async (req, res) => {
-  res.json({
-    memoDecoded: await decodeMemo(req.memo),
-    username: req.user,
-  });
-});
 
 export default router;
