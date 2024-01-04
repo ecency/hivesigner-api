@@ -9,7 +9,6 @@ const DEFAULT_SERVER = [
 ];
 
 const broadcast_server = [
-  'https://api.deathwing.me',
   'https://hived.emre.sh',
   'https://anyx.io',
   'https://rpc.ecency.com',
