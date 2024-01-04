@@ -9,7 +9,8 @@ const DEFAULT_SERVER = [
 ];
 
 const broadcast_server = [
-  'https://techcoderx.com',
+  'https://api.deathwing.me',
+  'https://hived.emre.sh',
   'https://anyx.io',
   'https://rpc.ecency.com',
   'https://api.hive.blog'
