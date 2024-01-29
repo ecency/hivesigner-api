@@ -2,15 +2,15 @@ import { Client } from '@hiveio/dhive';
 import { cache } from './cache';
 
 const DEFAULT_SERVER = [
-  'https://anyx.io',
   'https://techcoderx.com',
+  'https://anyx.io',
   'https://api.hive.blog'
 ];
 
 const broadcast_server = [
-  'https://hived.emre.sh',
   'https://anyx.io',
-  'https://api.hive.blog'
+  'https://api.hive.blog',
+  'https://hived.emre.sh'
 ];
 
 const DEFAULT_TESTNET_SERVER = [
