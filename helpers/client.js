@@ -7,8 +7,8 @@ const DEFAULT_SERVER = [
 ];
 
 const broadcast_server = [
-  'https://api.hive.blog',
   'https://anyx.io',
+  'https://api.hive.blog',
 ];
 
 const DEFAULT_TESTNET_SERVER = [
