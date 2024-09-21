@@ -2,9 +2,9 @@ import { Client } from '@hiveio/dhive';
 import { cache } from './cache';
 
 const DEFAULT_SERVER = [
+  'https://api.hive.blog',
   'https://techcoderx.com',
-  'https://anyx.io',
-  'https://api.hive.blog'
+  'https://anyx.io'
 ];
 
 const broadcast_server = [
