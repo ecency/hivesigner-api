@@ -4,13 +4,13 @@ import { cache } from './cache';
 const DEFAULT_SERVER = [
   'https://api.hive.blog',
   'https://techcoderx.com',
-  'https://anyx.io'
+  'https://anyx.io',
 ];
 
 const broadcast_server = [
   'https://anyx.io',
   'https://api.hive.blog',
-  'https://hived.emre.sh'
+  'https://techcoderx.com',
 ];
 
 const DEFAULT_TESTNET_SERVER = [
