@@ -8,7 +8,7 @@ const DEFAULT_SERVER = [
 ];
 
 const broadcast_server = [
-  'https://anyx.io',
+  'https://api.deathwing.me',
   'https://api.hive.blog',
   'https://techcoderx.com',
 ];
