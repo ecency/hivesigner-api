@@ -4,7 +4,7 @@ import { cache } from './cache';
 const DEFAULT_SERVER = [
   'https://api.hive.blog',
   'https://techcoderx.com',
-  'https://anyx.io',
+  'https://api.deathwing.me',
 ];
 
 const broadcast_server = [
