@@ -46,4 +46,7 @@ jobs:
           git pull origin main
           npm install
           export API_PORT=$API_PORT
-          pm2 reload api
+          export BROADCAST_NETWORK=$BROADCAST_NETWORK
+          export BROADCASTER_USERNAME=$BROADCASTER_USERNAME
+          export BROADCASTER_POSTING_WIF=$BROADCASTER_POSTING_WIF
+          pm2 reload api --update-env || pm2 start --no-automation --max-memory-restart 900M npm --name "api" -- start
