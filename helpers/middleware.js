@@ -3,7 +3,7 @@ import pkg from 'lodash';
 import { verify } from './token';
 import { getAppProfile, b64uToB64 } from './utils';
 import { client, getAccount } from './client';
-import cjson from '../config.json';
+import cjson from '../config.json' assert { type: "json" };
 
 const { intersection, has } = pkg;
 const { authorized_operations } = cjson;
