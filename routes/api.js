@@ -4,7 +4,7 @@ import { authenticate, verifyPermissions } from '../helpers/middleware';
 import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
 import { decodeMemo, issue } from '../helpers/token';
 import { client, bclient, getAccount } from '../helpers/client';
-import cjson from '../config.json' assert { type: "json" };
+import cjson from '../config.json' assert { type: 'json' };
 
 const { authorized_operations, token_expiration } = cjson;
 
