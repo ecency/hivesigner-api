@@ -27,6 +27,10 @@ app.use(cors());
 app.use(strategy);
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/_health', (req, res) => {
+  res.json({ ok: true });
+});
+
 app.use('/api', apis);
 
 app.get('/*', (req, res) => {

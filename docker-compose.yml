@@ -1,0 +1,31 @@
+version: '3.7'
+
+services:
+  api:
+    image: ecency/hivesigner-api:latest
+    environment:
+      - API_PORT
+      - BROADCAST_NETWORK
+      - BROADCASTER_USERNAME
+      - BROADCASTER_POSTING_WIF
+    ports:
+      - ${API_PORT}:${API_PORT}
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+        delay: 10s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 60s
