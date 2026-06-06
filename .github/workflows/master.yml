@@ -28,7 +28,28 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-    - name: SSH and deploy node app
+    - name: Check Out Repo
+      uses: actions/checkout@v2
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and push
+      id: docker_build
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./Dockerfile
+        push: true
+        tags: ecency/hivesigner-api:latest
+
+    - name: Image digest
+      run: echo ${{ steps.docker_build.outputs.digest }}
+
+    - name: SSH and deploy API container
       uses: appleboy/ssh-action@5711a203b3207eb1c6cebec6ac2152ab210ec3ae
       env:
         BROADCAST_NETWORK: ${{secrets.BROADCAST_NETWORK}}
@@ -44,9 +65,9 @@ jobs:
         script: |
           cd ~/hsapi
           git pull origin main
-          npm install
           export API_PORT=$API_PORT
           export BROADCAST_NETWORK=$BROADCAST_NETWORK
           export BROADCASTER_USERNAME=$BROADCASTER_USERNAME
           export BROADCASTER_POSTING_WIF=$BROADCASTER_POSTING_WIF
-          pm2 reload api --update-env || pm2 start --no-automation --max-memory-restart 900M npm --name "api" -- start
+          docker pull ecency/hivesigner-api:latest
+          docker stack deploy -c docker-compose.yml hivesigner-api
