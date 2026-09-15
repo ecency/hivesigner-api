@@ -4,6 +4,7 @@ import { authenticate, verifyPermissions } from '../helpers/middleware';
 import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
 import { decodeMemo, issue } from '../helpers/token';
 import { client, bclient, getAccount } from '../helpers/client';
+import { getAppsIndex } from '../helpers/apps';
 import cjson from '../config.json' assert { type: 'json' };
 
 const { authorized_operations, token_expiration } = cjson;
@@ -137,6 +138,29 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
         },
       );
   }
+});
+
+/**
+ * The app directory, ranked from real usage.
+ *
+ * Public and unauthenticated: it is the same list for everyone, and the UI
+ * reads it before anybody has signed in. Ranking happens on a timer in
+ * helpers/apps.js, so this only ever reads the last good answer.
+ */
+router.get('/apps', (req, res) => {
+  const index = getAppsIndex();
+  if (!index) {
+    // Only before the first refresh completes. The UI falls back to reading
+    // the curated post straight off the chain, so this is not fatal for it.
+    return res.status(503).json({
+      error: 'unavailable',
+      error_description: 'The app directory is still being built',
+    });
+  }
+  // Short enough that a change is picked up the same day, long enough that this
+  // is not recomputed per visitor. The payload is identical for every caller.
+  res.set('Cache-Control', 'public, max-age=300');
+  return res.json(index);
 });
 
 /** Request app access token */

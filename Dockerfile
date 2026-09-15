@@ -7,6 +7,12 @@ RUN yarn install --frozen-lockfile --non-interactive --production=true
 
 COPY . .
 
+# The usage history lives here, and the runtime is non-root. A named volume
+# mounted on a path the image does not own is created ROOT-owned and every write
+# fails silently; Docker seeds a fresh volume from the image, so creating it
+# here with the right owner is what makes the mount writable.
+RUN mkdir -p /var/app/data && chown -R node:node /var/app/data
+
 # Drop root for the runtime. The app only reads from the image, so nothing here
 # needs write access; the install above already ran as root and is complete.
 # `node` is a non-root user the official image ships.

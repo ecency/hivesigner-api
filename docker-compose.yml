@@ -10,6 +10,11 @@ services:
       - BROADCASTER_POSTING_WIF
     ports:
       - ${API_PORT}:${API_PORT}
+    # The app-usage history, which IS the directory. A task's filesystem is
+    # thrown away on every deploy, and without this the list would empty itself
+    # on each release and take hours of traffic to rebuild.
+    volumes:
+      - hsapi-data:/var/app/data
     deploy:
       replicas: 1
       resources:
@@ -33,3 +38,8 @@ services:
         # notices. Uncapped restarts are the right trade for a single-replica
         # service whose failure mode is that nobody can sign in anywhere.
         window: 60s
+
+volumes:
+  # Local to the node. There is one replica, so there is one node that matters;
+  # if that ever changes this needs to become a shared volume or a datastore.
+  hsapi-data:
