@@ -2,13 +2,22 @@
 /**
  * The app directory: which apps use Hivesigner, ranked by how much.
  *
- * ONE SIGNAL, MEASURED HERE
+ * TWO THINGS, AND BOTH ARE NEEDED
  *
- * Every authenticated request carries the app's account name as `req.proxy`,
- * set by `strategy` only AFTER the token's signature has been verified against
- * the chain. So a request reaching this server is an app being used, today, by
- * a user who signed for it. helpers/usage.js counts that; this module turns the
- * counts into a directory.
+ * Usage ORDERS the list: helpers/usage.js counts requests made on each app's
+ * behalf. Registration DECIDES who is on it: the app account must have granted
+ * posting authority to the broadcaster.
+ *
+ * The second is not optional. `req.proxy` is `signed_message.app`, a string
+ * chosen by whoever built the token - the signature proves the user signed the
+ * message, not that the app is who it claims. One throwaway account calling
+ * /_health three times put `ecency.app`, `peakd.app` and `totally-made-up` into
+ * the usage file, and without a gate all three would have been served to the UI
+ * with their profile text and had their websites probed by this server.
+ *
+ * Granting posting authority to the broadcaster IS the registration act - it is
+ * what verifyPermissions requires before this API will broadcast for an app,
+ * and no third party can perform it for an account they do not control.
  *
  * WHAT THIS DELIBERATELY DOES NOT DO
  *
@@ -56,6 +65,8 @@ const indexerClient = new Client(
   { timeout: 15000, failoverThreshold: 3, consoleOnFailover: true },
 );
 
+const BROADCASTER = process.env.BROADCASTER_USERNAME;
+
 const USERNAME_RE = /^[a-z][a-z0-9.-]{2,15}$/;
 const isUsername = (v) => typeof v === 'string' && USERNAME_RE.test(v);
 
@@ -66,6 +77,20 @@ const parseJson = (value) => {
   } catch (e) {
     return {};
   }
+};
+
+/**
+ * Has this account actually registered with Hivesigner?
+ *
+ * The same condition verifyPermissions enforces before broadcasting: the app's
+ * posting authority includes the broadcaster account. An account that has not
+ * done this cannot have the API act for it, so it is not an app here either -
+ * whatever name its users put in their tokens.
+ */
+const isRegistered = (account) => {
+  if (!BROADCASTER) return false;
+  const auths = (account && account.posting && account.posting.account_auths) || [];
+  return auths.some(([who]) => who === BROADCASTER);
 };
 
 /** Name, description, website and creator, as the account publishes them. */
@@ -180,7 +205,23 @@ const build = async () => {
     );
     accounts.push(...(batch || []));
   }
-  const profiles = new Map(accounts.map((a) => [a.name, profileOf(a)]));
+
+  // THE GATE. An account that has not granted posting authority to the
+  // broadcaster is not an app, however many requests carried its name. Pinned
+  // entries are not exempt: a pin decides order, not identity.
+  const registered = accounts.filter(isRegistered);
+  const profiles = new Map(registered.map((a) => [a.name, profileOf(a)]));
+  const names = registered.map((a) => a.name);
+
+  if (names.length === 0) {
+    publish({
+      updated_at: new Date().toISOString(),
+      building: true,
+      apps: [],
+      featured: [],
+    });
+    return;
+  }
 
   const inspect = async (username) => {
     const profile = profiles.get(username) || {};
@@ -201,7 +242,7 @@ const build = async () => {
 
   // Capped, not Promise.all: forty parallel fetches tripped a
   // MaxListenersExceededWarning, which is the runtime saying the same thing.
-  const apps = await mapLimit(candidates, config.site_check_concurrency, inspect);
+  const apps = await mapLimit(names, config.site_check_concurrency, inspect);
 
   // A site that no longer lands on its own domain cannot be FEATURED. It stays
   // in the list with its reason, because an operator should see it rather than

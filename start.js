@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { strategy } from './helpers/middleware';
 import apis from './routes/api';
 import { startAppsIndexer } from './helpers/apps';
-import { flushUsage, loadUsage, usageRecorder } from './helpers/usage';
+import { flushUsage, loadUsage } from './helpers/usage';
 
 const { json, urlencoded } = bparser;
 const __filename = fileURLToPath(import.meta.url);
@@ -27,9 +27,6 @@ app.use(json({ limit: '20mb' }));
 app.use(urlencoded({ limit: '20mb', extended: false }));
 app.use(cors());
 app.use(strategy);
-// AFTER strategy, which is what verifies the token and sets req.proxy. This is
-// the app directory's primary signal: which apps are actually being used.
-app.use(usageRecorder);
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/_health', (req, res) => {

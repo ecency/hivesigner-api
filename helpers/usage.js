@@ -12,12 +12,22 @@
  *  - posting authority grants never expire, so an app that shut down in 2019
  *    still ranks on grants alone.
  *
- * This server, meanwhile, sees the real thing. `strategy` puts the app's account
- * name on every authenticated request as `req.proxy`, AFTER verifying the
- * token's signature against the chain. So a request that reaches here is an app
- * that is being used, right now, by a real user who signed for it. No name
- * mapping, no follow list, no guessing which client string belongs to which
- * account.
+ * This server sees requests made on an app's behalf: `strategy` puts the app
+ * name on each one as `req.proxy`.
+ *
+ * ⛔ THAT NAME IS NOT PROOF OF ANYTHING. It is `signed_message.app`, a string
+ * chosen by whoever built the token; the signature proves the USER signed the
+ * message, not that the app is who it says. Any account can sign a token naming
+ * any app and hit any route. Reproduced: one throwaway account calling
+ * /_health three times wrote `ecency.app`, `peakd.app` and `totally-made-up`
+ * into this file.
+ *
+ * So these counts are a POPULARITY signal over names that anyone can assert.
+ * What makes an entry real is checked where the directory is built
+ * (helpers/apps.js): the account must have granted posting authority to the
+ * broadcaster, which is the act of registering with Hivesigner and cannot be
+ * performed by a third party. Counting here stays cheap; the gate is on the
+ * output.
  *
  * WHAT IS STORED
  *
@@ -27,9 +37,8 @@
  *
  * WHAT THIS CANNOT TELL YOU
  *
- * An app can only appear here by presenting tokens its own users signed, so
- * inflating the count means controlling those accounts. The same is true of
- * grants. It bounds the abuse rather than removing it.
+ * Which of these names is a real app. Only the registration check in
+ * helpers/apps.js answers that.
  */
 
 import {
@@ -43,6 +52,15 @@ const RETENTION_DAYS = 45;
 const FLUSH_MS = 60 * 1000;
 /** A ceiling on the per-day user set, so one app cannot grow it without bound. */
 const MAX_USERS_PER_DAY = 50000;
+/**
+ * A ceiling on DISTINCT APP NAMES per day.
+ *
+ * Names are caller-chosen (see above), so without this one account rotating the
+ * name on every request creates a new bucket each time - unbounded memory and a
+ * file that grows until the disk does not. Far above any plausible number of
+ * real integrations.
+ */
+const MAX_APPS_PER_DAY = 500;
 
 const FILE = process.env.USAGE_FILE || join('/var/app/data', 'usage.json');
 
@@ -68,6 +86,7 @@ const bucket = (day, app) => {
   if (!days.has(day)) days.set(day, new Map());
   const apps = days.get(day);
   if (!apps.has(app)) {
+    if (apps.size >= MAX_APPS_PER_DAY) return null;
     apps.set(app, { requests: 0, users: new Set(), restoredUsers: 0 });
   }
   return apps.get(app);
@@ -98,6 +117,9 @@ const flush = () => {
   flushTimer = null;
   if (!dirty) return;
   dirty = false;
+  // Here, not only at load. Otherwise days accumulate until the next restart
+  // and every flush serializes all of them.
+  prune();
   try {
     mkdirSync(dirname(FILE), { recursive: true });
     // Write-then-rename: a crash mid-write must not leave a truncated file that
@@ -147,6 +169,8 @@ export const loadUsage = () => {
 export const recordAppRequest = (app, user) => {
   if (!isUsername(app)) return;
   const entry = bucket(today(), app);
+  // Day is full: see MAX_APPS_PER_DAY.
+  if (!entry) return;
   entry.requests += 1;
   if (isUsername(user) && entry.users.size < MAX_USERS_PER_DAY) {
     entry.users.add(user);
@@ -185,12 +209,19 @@ export const usageRanking = ({ windowDays = 30 } = {}) => {
   );
 };
 
-/** Express middleware. Runs after `strategy`, which is what sets req.proxy. */
+/**
+ * Express middleware. Mounted on the /api router, NOT globally.
+ *
+ * Globally it counted /_health too, which is how a caller could register a name
+ * without touching a single API route. And it counts on `finish` with a
+ * successful status, so a request that was rejected does not count as usage.
+ */
 export const usageRecorder = (req, res, next) => {
-  // req.proxy is only set once the token's signature has been VERIFIED against
-  // the chain, so this counts genuine usage rather than anything a caller can
-  // assert.
-  if (req.proxy) recordAppRequest(req.proxy, req.user);
+  if (req.proxy) {
+    res.on('finish', () => {
+      if (res.statusCode < 400) recordAppRequest(req.proxy, req.user);
+    });
+  }
   next();
 };
 

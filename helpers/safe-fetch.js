@@ -216,12 +216,25 @@ const requestOnce = (url, timeoutMs) => new Promise((resolve, reject) => {
  * Returns { status, url } for the final hop. Redirects are followed manually so
  * hop two is screened exactly like hop one - `redirect: 'follow'` would hand a
  * redirect to 169.254.169.254 straight to the socket.
+ *
+ * `timeoutMs` is node's INACTIVITY timeout, so a site that dribbles a byte at a
+ * time can hold a slot for longer than it. Bounded in practice because the
+ * response is destroyed as soon as the headers arrive; a per-hop deadline would
+ * bound it absolutely and is worth adding if a real site ever abuses it.
  */
 export const safeFetch = async (input, { timeoutMs = 12000, maxHops = 5 } = {}) => {
   let url = new URL(input);
   for (let hop = 0; hop <= maxHops; hop += 1) {
     if (url.protocol !== 'https:' && url.protocol !== 'http:') {
       throw new Error(`blocked scheme ${url.protocol}`);
+    }
+    // WEB PORTS ONLY. Screening the address stops this reaching the private
+    // network, but a public IP on any port left it a reachability oracle for
+    // arbitrary services - point an app profile at host:22 and read the answer
+    // off the directory. A website lives on 80 or 443.
+    const port = url.port || (url.protocol === 'https:' ? '443' : '80');
+    if (port !== '80' && port !== '443') {
+      throw new Error(`blocked port ${port}`);
     }
     // Fails fast on a literal or an obviously local name. The connection-bound
     // lookup above is what actually holds the line.
