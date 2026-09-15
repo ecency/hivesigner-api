@@ -18,12 +18,18 @@
  *    hop one. `redirect: 'follow'` would hand a redirect to 169.254.169.254
  *    straight to the socket.
  *
- * This does not close the DNS-rebinding window between the lookup and the
- * connect. Doing that properly needs a custom connect hook; it is noted rather
- * than pretended away, and the payoff for an attacker here is a boolean.
+ * The check is BOUND TO THE CONNECTION, not done beside it. An earlier version
+ * resolved the name, decided it was public, and then called fetch() - which
+ * resolves again. A name that answers with a public address for the first
+ * lookup and a private one for the second walks straight through that, which is
+ * DNS rebinding and is not exotic. The request now goes through http/https with
+ * a custom `lookup`, so the address the socket connects to is the address that
+ * was screened.
  */
 
 import dns from 'dns';
+import http from 'http';
+import https from 'https';
 import net from 'net';
 
 const { lookup } = dns.promises;
@@ -148,11 +154,59 @@ export const assertPublicHost = async (hostname) => {
 };
 
 /**
+ * A DNS lookup that refuses to answer with an address we will not connect to.
+ *
+ * This is the whole point: node hands the result of THIS call straight to the
+ * socket, so there is no second resolution for a rebinding attack to win.
+ */
+const guardedLookup = (hostname, options, callback) => {
+  dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) {
+      callback(err);
+      return;
+    }
+    const list = Array.isArray(addresses) ? addresses : [addresses];
+    const blocked = list.find((a) => isPrivateAddress(a.address));
+    if (blocked) {
+      callback(new Error(`blocked address ${blocked.address} for ${hostname}`));
+      return;
+    }
+    // `all` was forced on above; hand back the shape the caller asked for.
+    if (options && options.all) callback(null, list);
+    else callback(null, list[0].address, list[0].family);
+  });
+};
+
+/** One request, no redirect following, body discarded. */
+const requestOnce = (url, timeoutMs) => new Promise((resolve, reject) => {
+  const transport = url.protocol === 'https:' ? https : http;
+  const req = transport.request(
+    url,
+    {
+      method: 'GET',
+      // The guarantee. Without it the agent resolves the name itself and the
+      // screening above becomes advisory.
+      lookup: guardedLookup,
+      headers: { 'user-agent': 'hivesigner-app-directory' },
+      timeout: timeoutMs,
+    },
+    (res) => {
+      // Nothing here reads a body, and an undrained one holds the socket open.
+      res.resume();
+      resolve({ status: res.statusCode, location: res.headers.location });
+    },
+  );
+  req.on('timeout', () => req.destroy(new Error('timeout')));
+  req.on('error', reject);
+  req.end();
+});
+
+/**
  * GET a URL chosen by someone else, following redirects by hand.
  *
- * Returns { status, url } for the final hop. The body is cancelled rather than
- * read: this only needs reachability and the landing host, and leaving bodies
- * undrained keeps sockets alive until GC.
+ * Returns { status, url } for the final hop. Redirects are followed manually so
+ * hop two is screened exactly like hop one - `redirect: 'follow'` would hand a
+ * redirect to 169.254.169.254 straight to the socket.
  */
 export const safeFetch = async (input, { timeoutMs = 12000, maxHops = 5 } = {}) => {
   let url = new URL(input);
@@ -160,20 +214,14 @@ export const safeFetch = async (input, { timeoutMs = 12000, maxHops = 5 } = {}) 
     if (url.protocol !== 'https:' && url.protocol !== 'http:') {
       throw new Error(`blocked scheme ${url.protocol}`);
     }
+    // Fails fast on a literal or an obviously local name. The connection-bound
+    // lookup above is what actually holds the line.
     await assertPublicHost(url.hostname);
 
-    const res = await fetch(url, {
-      redirect: 'manual',
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: { 'user-agent': 'hivesigner-app-directory' },
-    });
-    // Nothing here reads a body, and an undrained one holds the socket.
-    if (res.body) await res.body.cancel().catch(() => {});
-
-    const location = res.headers.get('location');
-    const redirected = res.status >= 300 && res.status < 400 && location;
+    const res = await requestOnce(url, timeoutMs);
+    const redirected = res.status >= 300 && res.status < 400 && res.location;
     if (!redirected) return { status: res.status, url: url.toString() };
-    url = new URL(location, url);
+    url = new URL(res.location, url);
   }
   throw new Error('too many redirects');
 };

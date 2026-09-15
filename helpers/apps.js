@@ -203,13 +203,16 @@ const build = async () => {
   // MaxListenersExceededWarning, which is the runtime saying the same thing.
   const apps = await mapLimit(candidates, config.site_check_concurrency, inspect);
 
-  // Pinned first in configured order, then by how many people used it. A site
-  // that no longer lands on its own domain cannot be FEATURED, but it stays in
-  // the list with its reason, because an operator should see it rather than
+  // A site that no longer lands on its own domain cannot be FEATURED. It stays
+  // in the list with its reason, because an operator should see it rather than
   // have it silently disappear.
-  const featurable = apps.filter(
-    (app) => pinned.includes(app.username) || app.site === 'ok',
-  );
+  //
+  // PINNING DOES NOT EXEMPT AN APP FROM THAT. Review caught the earlier version
+  // letting it, which contradicted both the comment here and the README - and
+  // the point of the gate is that featuring a lapsed domain sends people to
+  // whoever owns it now. `pinned` decides ORDER and rescues an app with little
+  // usage; it is not an override on where users get sent.
+  const featurable = apps.filter((app) => app.site === 'ok');
   const ordered = [
     ...pinned.map((n) => featurable.find((a) => a.username === n)).filter(Boolean),
     ...featurable

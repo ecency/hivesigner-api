@@ -46,7 +46,10 @@ its `site` reason, but cannot be `featured`.
 Rebuilt on a timer (`apps.refresh_minutes`); requests only ever read the last
 good answer, and a failed rebuild keeps the previous one.
 
-`apps.pinned` forces an entry to the front, `apps.excluded` drops one outright.
+`apps.pinned` forces an entry to the front of the featured list and rescues one
+with little usage; `apps.excluded` drops one outright. Pinning does **not**
+exempt an app from the site check — featuring a lapsed domain would send people
+to whoever owns it now, whatever the config says.
 
 ### Usage storage
 
