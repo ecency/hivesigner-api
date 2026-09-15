@@ -30,5 +30,6 @@ services:
         # NO max_attempts. With a cap and a single replica, five crashes inside
         # the window left the service down until the next deploy - which for an
         # OAuth API means every app's sign-in stays broken until someone
-        # notices. vision_vapi on EU runs uncapped for the same reason.
+        # notices. Uncapped restarts are the right trade for a single-replica
+        # service whose failure mode is that nobody can sign in anywhere.
         window: 60s
