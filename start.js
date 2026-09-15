@@ -5,6 +5,7 @@ import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { strategy } from './helpers/middleware';
 import apis from './routes/api';
+import { startAppsIndexer } from './helpers/apps';
 
 const { json, urlencoded } = bparser;
 const __filename = fileURLToPath(import.meta.url);
@@ -39,4 +40,7 @@ app.get('/*', (req, res) => {
 
 app.listen(port, () => {
   console.log(`Listening on port ${port}`);
+  // Builds the /api/apps answer in the background. It never throws to here: a
+  // failed pass keeps the previous answer and logs.
+  startAppsIndexer();
 });

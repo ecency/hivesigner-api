@@ -8,5 +8,13 @@
     "custom_json",
     "claim_reward_balance",
     "account_update2"
-  ]
+  ],
+  "apps": {
+    "featured_limit": 8,
+    "shortlist_size": 40,
+    "post_pages": 25,
+    "refresh_minutes": 360,
+    "pinned": [],
+    "excluded": []
+  }
 }
