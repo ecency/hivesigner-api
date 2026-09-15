@@ -87,13 +87,33 @@ jobs:
           # through the rollout, so that check can pass on the task being replaced
           # before the new one has run at all. UpdateStatus is about the update
           # itself, which is the actual question being asked.
+          # A task actually in Running. `--filter desired-state=running` alone
+          # is not an answer: during a start-first update the OUTGOING task is
+          # still desired-running, which is why the update state gates an
+          # update. On a first deploy there is no update and no old task, so
+          # this is exactly the right question.
+          running() {
+            docker service ps hivesigner-api_api \
+              --filter desired-state=running --format '{{.CurrentState}}' \
+              2>/dev/null | grep -q '^Running'
+          }
           for i in $(seq 1 30); do
             state=$(docker service inspect hivesigner-api_api --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}none{{end}}' 2>/dev/null || echo unknown)
             case "$state" in
-              completed|none)
-                echo "update state: $state"
+              completed)
+                echo "update state: completed"
                 docker service ps hivesigner-api_api --filter desired-state=running
                 exit 0 ;;
+              none)
+                # A NEW service has no update status - including while its only
+                # task is failing to start. Accepting `none` on sight reported
+                # success for a deploy that never ran, so it has to wait for a
+                # task rather than for the absence of an update.
+                if running; then
+                  echo "first deploy: task running"
+                  docker service ps hivesigner-api_api --filter desired-state=running
+                  exit 0
+                fi ;;
               rollback_started|rollback_completed|paused)
                 echo "update did not take: $state"
                 docker service ps hivesigner-api_api --no-trunc | head -5
@@ -101,6 +121,6 @@ jobs:
             esac
             sleep 5
           done
-          echo "update did not complete in time:"
+          echo "service did not reach a running state in time:"
           docker service ps hivesigner-api_api --no-trunc | head -5
           exit 1
