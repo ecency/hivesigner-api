@@ -1,4 +1,4 @@
-/* eslint-disable no-await-in-loop */
+/* eslint-disable no-await-in-loop, no-bitwise */
 /**
  * Fetching a URL that an untrusted party chose.
  *
@@ -49,21 +49,76 @@ const isPrivateV4 = (ip) => {
   );
 };
 
-const isPrivateV6 = (ip) => {
+/**
+ * Expand an IPv6 literal to its eight 16-bit groups.
+ *
+ * Needed because the address cannot be screened as TEXT. Node's URL parser
+ * canonicalizes `[::ffff:127.0.0.1]` to `::ffff:7f00:1`, so a string test for
+ * the dotted IPv4-mapped form never fires on anything a URL actually produces -
+ * and every private IPv4 address could be reached by writing it that way.
+ */
+const expandV6 = (ip) => {
   const addr = ip.toLowerCase().split('%')[0];
-  if (addr === '::' || addr === '::1') return true; // unspecified, loopback
-  // IPv4-mapped (::ffff:127.0.0.1) is the classic way round an IPv4-only check.
-  const mapped = addr.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateV4(mapped[1]);
-  return (
-    addr.startsWith('fc') // unique local
-    || addr.startsWith('fd') // unique local
-    || addr.startsWith('fe8') // link-local
-    || addr.startsWith('fe9')
-    || addr.startsWith('fea')
-    || addr.startsWith('feb')
-    || addr.startsWith('ff') // multicast
-  );
+  const [head, tail] = addr.split('::');
+  const toGroups = (part) => {
+    if (!part) return [];
+    const bits = part.split(':').filter((x) => x !== '');
+    const out = [];
+    bits.forEach((bit, index) => {
+      // A trailing dotted quad, as in ::ffff:127.0.0.1, is two groups.
+      if (index === bits.length - 1 && bit.includes('.')) {
+        const octets = bit.split('.').map(Number);
+        if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n))) {
+          out.push(Number.NaN);
+          return;
+        }
+        out.push((octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]);
+        return;
+      }
+      out.push(Number.parseInt(bit, 16));
+    });
+    return out;
+  };
+  const left = toGroups(head);
+  const right = tail === undefined ? [] : toGroups(tail);
+  if (tail === undefined) {
+    return left.length === 8 ? left : null;
+  }
+  const fill = 8 - left.length - right.length;
+  if (fill < 0) return null;
+  return [...left, ...new Array(fill).fill(0), ...right];
+};
+
+const isPrivateV6 = (ip) => {
+  const g = expandV6(ip);
+  // Unparseable: refuse rather than guess.
+  if (!g || g.length !== 8 || g.some((n) => !Number.isInteger(n) || n < 0 || n > 0xffff)) {
+    return true;
+  }
+  const allZero = (upto) => g.slice(0, upto).every((n) => n === 0);
+  // ::  and  ::1
+  if (allZero(7) && (g[7] === 0 || g[7] === 1)) return true;
+  // IPv4-mapped (::ffff:a.b.c.d), IPv4-translated (::ffff:0:a.b.c.d) and the
+  // deprecated IPv4-compatible (::a.b.c.d): screen the embedded IPv4.
+  const allZeroFrom = (from, upto) => g.slice(from, upto).every((n) => n === 0);
+  const embedded = () => {
+    if (allZero(5) && g[5] === 0xffff) return [g[6], g[7]];
+    if (allZero(4) && g[4] === 0xffff && g[5] === 0) return [g[6], g[7]];
+    if (allZero(6)) return [g[6], g[7]];
+    // NAT64 well-known prefix 64:ff9b::/96
+    if (g[0] === 0x64 && g[1] === 0xff9b && allZeroFrom(2, 6)) return [g[6], g[7]];
+    return null;
+  };
+  const v4 = embedded();
+  if (v4) {
+    const dotted = [v4[0] >> 8, v4[0] & 0xff, v4[1] >> 8, v4[1] & 0xff].join('.');
+    return isPrivateV4(dotted);
+  }
+  const first = g[0];
+  if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+  if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((first & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  return false;
 };
 
 export const isPrivateAddress = (ip) => {
