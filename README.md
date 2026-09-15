@@ -22,6 +22,24 @@ read the last good answer, and a failed refresh keeps serving the previous one.
 Before the first refresh completes it answers from the curated
 `@hivesigner/top-apps` post, marked `"source": "curated"`.
 
+### How an app gets on the list
+
+**What this server has served, first.** Every authenticated request carries the
+app's account name as `req.proxy`, set only after the token's signature has been
+verified against the chain. So a request reaching the API is an app being used
+today by a user who signed for it — measured, not inferred. `helpers/usage.js`
+counts that per app per UTC day (counts only; never usernames) and the directory
+ranks on distinct users.
+
+**The on-chain signals are a bootstrap, not the source of truth.** They exist so
+a fresh deployment has a directory on day one instead of an empty list for a
+month. Both are stale by construction and should be read that way:
+
+- the `@hivesigner` follow list has not been touched since **March 2023**, so
+  `@threespeak`, `@leofinance`, `@liketu` and `@dbuzz` are simply not in it;
+- posting authority grants **never expire**, so an app that shut down in 2019
+  still scores on them.
+
 **Two gates, both necessary.** Posting authority grants are cumulative and never
 expire, so ranking on them alone featured DTube, DLive, SteemHunt and DrugWars,
 dead for years. And several app domains in this directory lapsed and were
@@ -45,6 +63,23 @@ domains were found. Worth reading after a refresh.
   would mean scanning `account_update` operations rather than account state.
 
 `apps.excluded` drops an account outright.
+
+### Usage storage
+
+`helpers/usage.js` keeps 45 days in `/var/app/data/usage.json` (override with
+`USAGE_FILE`), written at most once a minute and atomically. The compose file
+mounts a named volume there: a task's filesystem is discarded on every deploy,
+and losing this would drop the directory back onto the stale on-chain fallbacks
+until it rebuilt.
+
+It stores **counts only**. Distinct users are tallied in memory for the current
+day and folded to a number when written, so the file never holds who used what.
+The cost is that a restart mid-day loses that day's deduplication and the figure
+undercounts for the rest of it.
+
+An app can only appear here by presenting tokens its own users signed, so
+inflating a count means controlling those accounts. That bounds the abuse rather
+than removing it — the same is true of grants.
 
 ## Learn more 
 

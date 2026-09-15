@@ -33,6 +33,7 @@
 import { Client } from '@hiveio/dhive';
 import { cache } from './cache';
 import { mapLimit, safeFetch } from './safe-fetch';
+import { usageRanking } from './usage';
 import cjson from '../config.json' assert { type: 'json' };
 
 const { apps: config } = cjson;
@@ -326,14 +327,28 @@ const rank = async () => {
   // excluded account visible in the full list.
   const published = directory.filter((name) => !excluded.has(name));
 
-  // Candidates are the registered directory PLUS anything people are actually
-  // granting authority to. The @hivesigner follow list was last curated years
-  // ago, so several of the most-used apps on Hive are not in it at all; ranking
-  // only inside it can surface nothing but the era it was built in.
+  // WHAT THIS SERVER HAS SEEN, first. Every other signal here is a proxy for
+  // it: the follow list has not been touched since March 2023 (@threespeak,
+  // @leofinance, @liketu and @dbuzz are all absent from it) and grants never
+  // expire, so an app that shut down in 2019 still scores on them. A request
+  // reaching this server is an app being used, today, by a user who signed for
+  // it - measured rather than inferred.
+  const usage = usageRanking({ windowDays: config.usage_window_days });
+  const usageByApp = new Map(usage.map((row) => [row.username, row]));
+
+  // Candidates: apps this server has served, plus the on-chain proxies as a
+  // BOOTSTRAP. The proxies matter only until usage history builds up - on a
+  // fresh deployment there is none, and the directory should not be empty for a
+  // month while it accumulates.
   const granted = [...grants.keys()].filter(isUsername);
-  const shortlist = [...new Set([...directory, ...granted])]
-    .filter((name) => !excluded.has(name) && (grants.get(name) || 0) > 0)
-    .sort((a, b) => (grants.get(b) || 0) - (grants.get(a) || 0))
+  const chainCandidates = [...new Set([...directory, ...granted])]
+    .filter((name) => (grants.get(name) || 0) > 0)
+    .sort((a, b) => (grants.get(b) || 0) - (grants.get(a) || 0));
+
+  const shortlist = [
+    ...new Set([...usage.map((row) => row.username), ...chainCandidates]),
+  ]
+    .filter((name) => !excluded.has(name))
     .slice(0, config.shortlist_size);
 
   // Only these get a website request: ~900 outbound requests per refresh would
@@ -357,6 +372,7 @@ const rank = async () => {
       site,
       grants: grants.get(username) || 0,
       matched: activityOf(username, profile.website, recent.clients),
+      usage: usageByApp.get(username) || null,
     };
   };
   const checked = await mapLimit(
@@ -393,18 +409,34 @@ const rank = async () => {
       .filter((row) => row.posts > 0)
       .map((row) => row.username),
   );
+  // An app this server has SERVED is alive by observation, so it needs no
+  // liveness proxy - only a website that has not been hijacked, which is about
+  // where it sends people rather than whether it is running. Everything else
+  // still has to prove itself through the post sample.
   const isEligible = (row) => pinned.includes(row.username)
     || (row.site.status === 'ok'
-      && (row.posts > 0 || featuredLastPass.has(row.username)));
+      && (row.usage
+        || row.posts > 0
+        || featuredLastPass.has(row.username)));
 
   const eligible = checked.filter(isEligible);
 
   // Pinned first, in configured order; the rest by grants.
+  // Pinned first, then everything this server has served, ordered by how many
+  // people used it, then the chain-only candidates by grants. Measured beats
+  // inferred, and an app with real usage outranks one with a big historical
+  // grant count every time.
+  const byUsageThenGrants = (a, b) => {
+    const ua = a.usage ? a.usage.users : -1;
+    const ub = b.usage ? b.usage.users : -1;
+    if (ua !== ub) return ub - ua;
+    return b.grants - a.grants;
+  };
   const ordered = [
     ...pinned.map((name) => eligible.find((r) => r.username === name)).filter(Boolean),
     ...eligible
       .filter((r) => !pinned.includes(r.username))
-      .sort((a, b) => b.grants - a.grants),
+      .sort(byUsageThenGrants),
   ];
 
   const reasonFor = (row) => {
@@ -417,6 +449,7 @@ const rank = async () => {
     source: 'ranked',
     method: {
       accounts_scanned: scanned,
+      apps_with_usage: usage.length,
       posts_sampled: [...recent.clients.values()].reduce((a, b) => a + b, 0),
       directory_size: published.length,
     },
@@ -426,6 +459,11 @@ const rank = async () => {
       website: row.site.status === 'ok' ? row.profile.website || null : null,
       grants: row.grants,
       posts: row.posts,
+      // What this server actually served. null means it has not seen the app,
+      // so the entry rests on the on-chain bootstrap signals.
+      usage: row.usage
+        ? { users: row.usage.users, requests: row.usage.requests, last_seen: row.usage.lastSeen }
+        : null,
     })),
     directory: published,
     // Named WITH the reason, so a person can see why something dropped off

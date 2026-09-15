@@ -17,6 +17,7 @@
     "pinned": [],
     "excluded": [],
     "site_check_concurrency": 8,
-    "retry_minutes": 5
+    "retry_minutes": 5,
+    "usage_window_days": 30
   }
 }

@@ -10,6 +10,12 @@ services:
       - BROADCASTER_POSTING_WIF
     ports:
       - ${API_PORT}:${API_PORT}
+    # The app-usage history. A task's filesystem is thrown away on every deploy,
+    # and this is the directory's primary signal, so losing it on each release
+    # would leave the list running on the stale on-chain fallbacks for a month
+    # while it rebuilt.
+    volumes:
+      - hsapi-data:/var/app/data
     deploy:
       replicas: 1
       resources:
@@ -32,3 +38,8 @@ services:
         # OAuth API means every app's sign-in stays broken until someone
         # notices. vision_vapi on EU runs uncapped for the same reason.
         window: 60s
+
+volumes:
+  # Local to the node. There is one replica, so there is one node that matters;
+  # if that ever changes this needs to become a shared volume or a datastore.
+  hsapi-data:
