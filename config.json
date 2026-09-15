@@ -12,6 +12,7 @@
   "apps": {
     "featured_limit": 8,
     "max_apps": 100,
+    "candidate_pool": 1000,
     "usage_window_days": 30,
     "refresh_minutes": 360,
     "retry_minutes": 5,

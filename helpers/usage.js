@@ -53,14 +53,23 @@ const FLUSH_MS = 60 * 1000;
 /** A ceiling on the per-day user set, so one app cannot grow it without bound. */
 const MAX_USERS_PER_DAY = 50000;
 /**
- * A ceiling on DISTINCT APP NAMES per day.
+ * Two ceilings on DISTINCT APP NAMES per day, because one is not enough.
  *
- * Names are caller-chosen (see above), so without this one account rotating the
- * name on every request creates a new bucket each time - unbounded memory and a
- * file that grows until the disk does not. Far above any plausible number of
- * real integrations.
+ * Names are caller-chosen (see above), so without a ceiling one account
+ * rotating the name on every request creates a new bucket each time -
+ * unbounded memory and a file that grows until the disk does not.
+ *
+ * But a single ceiling is racy in the other direction: once a day is full,
+ * every name not already in it is uncounted until midnight UTC, and the name
+ * that loses is whichever app's first request of the day happens to arrive
+ * late. An attacker can make that happen on purpose by filling the day at
+ * 00:00. So a name that something OTHER than the caller vouches for - it is in
+ * the directory the indexer last built, or it was seen yesterday - is allowed
+ * past the low ceiling. The high one is absolute and applies to everybody, so
+ * a day cannot grow without bound by inheriting the day before it.
  */
-const MAX_APPS_PER_DAY = 500;
+const MAX_UNKNOWN_APPS_PER_DAY = 500;
+const MAX_APPS_PER_DAY = 2000;
 
 const FILE = process.env.USAGE_FILE || join('/var/app/data', 'usage.json');
 
@@ -82,11 +91,38 @@ let dirty = false;
 let flushTimer = null;
 let loaded = false;
 
+/**
+ * The names in the directory the indexer last published.
+ *
+ * Set by helpers/apps.js after a successful build, rather than imported from
+ * it: apps.js reads usageRanking from here, so a read back the other way would
+ * be a cycle. Every name in it has passed the registration gate, so it is a
+ * safe allowlist and it is bounded by max_apps.
+ */
+let directoryApps = new Set();
+
+export const setDirectoryApps = (names) => {
+  directoryApps = new Set((names || []).filter(isUsername));
+};
+
+const dayBefore = (day) => new Date(Date.parse(`${day}T00:00:00Z`) - 86400000)
+  .toISOString()
+  .slice(0, 10);
+
+/** Has anything other than the caller's own say-so put this name on record? */
+const isVouchedFor = (day, app) => {
+  if (directoryApps.has(app)) return true;
+  const previous = days.get(dayBefore(day));
+  return !!(previous && previous.has(app));
+};
+
 const bucket = (day, app) => {
   if (!days.has(day)) days.set(day, new Map());
   const apps = days.get(day);
   if (!apps.has(app)) {
+    // See the two ceilings above. Absolute first, so nothing is exempt from it.
     if (apps.size >= MAX_APPS_PER_DAY) return null;
+    if (apps.size >= MAX_UNKNOWN_APPS_PER_DAY && !isVouchedFor(day, app)) return null;
     apps.set(app, { requests: 0, users: new Set(), restoredUsers: 0 });
   }
   return apps.get(app);
@@ -151,6 +187,11 @@ export const loadUsage = () => {
       Object.entries(apps || {}).forEach(([app, row]) => {
         if (!isUsername(app) || !row || typeof row !== 'object') return;
         const entry = bucket(day, app);
+        // A file with more names in a day than the absolute ceiling allows -
+        // hand-edited, or written by a build with a higher ceiling. Skipping
+        // the overflow keeps the rest of the history; dereferencing null here
+        // would be caught by the catch below and discard ALL of it.
+        if (!entry) return;
         entry.requests = Number(row.requests) || 0;
         entry.restoredUsers = Number(row.users) || 0;
       });

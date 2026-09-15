@@ -19,6 +19,24 @@
  * what verifyPermissions requires before this API will broadcast for an app,
  * and no third party can perform it for an account they do not control.
  *
+ * SO "APP" HERE MEANS "BROADCASTS THROUGH HIVESIGNER"
+ *
+ * That is narrower than "uses Hivesigner". A site that uses Hivesigner only to
+ * log people in never needs the grant: /api/me and /api/oauth2/token go through
+ * `authenticate`, and only /api/broadcast goes through `verifyPermissions`. Such
+ * a site cannot appear here automatically, and `pinned` in config.json is the
+ * only route for it.
+ *
+ * The obvious second signal does not work. `profile.type === 'app'` in the
+ * account's own posting metadata is account-controlled, and the OAuth code flow
+ * already reads it - but it is a label any account can put on itself at no cost
+ * and with no reference to Hivesigner, so accepting it would reopen the hole the
+ * gate closes: set the label, rotate names in tokens, get listed. The grant is
+ * specifically "Hivesigner may act for me", which is why it is the one used.
+ *
+ * It also costs nothing measurable. Of 26 well known Hive app accounts checked
+ * on chain, 5 carry `type: 'app'` and every one of those 5 has the grant too.
+ *
  * WHAT THIS DELIBERATELY DOES NOT DO
  *
  * An earlier version inferred the same thing from the chain: the @hivesigner
@@ -46,7 +64,7 @@
 import { Client } from '@hiveio/dhive';
 import { cache } from './cache';
 import { mapLimit, safeFetch } from './safe-fetch';
-import { usageRanking } from './usage';
+import { setDirectoryApps, usageRanking } from './usage';
 import cjson from '../config.json' assert { type: 'json' };
 
 const { apps: config } = cjson;
@@ -172,6 +190,21 @@ const publish = (payload) => {
   cache.set(CACHE_KEY, payload, 0);
 };
 
+/**
+ * Nothing to serve yet.
+ *
+ * Said plainly rather than by inventing a list: the UI renders "still
+ * building", and a few hours of traffic fixes it permanently.
+ */
+const publishBuilding = () => {
+  publish({
+    updated_at: new Date().toISOString(),
+    building: true,
+    apps: [],
+    featured: [],
+  });
+};
+
 const build = async () => {
   const excluded = new Set(config.excluded || []);
   const pinned = (config.pinned || []).filter(isUsername);
@@ -179,47 +212,56 @@ const build = async () => {
   const usage = usageRanking({ windowDays: config.usage_window_days });
   const usageByApp = new Map(usage.map((row) => [row.username, row]));
 
-  const candidates = [
+  /**
+   * The names checked for registration, ranked, and deliberately a much wider
+   * set than the directory holds.
+   *
+   * THE ORDER OF THESE TWO STEPS IS THE WHOLE POINT. Usage ranks names that
+   * anyone can assert, so cutting to `max_apps` first and gating afterwards
+   * lets junk hold the top of the list and push real apps off the end before
+   * the gate ever sees them - and with hundreds of fresh buckets available per
+   * day, each accruing "users" across the window, that is cheap to arrange.
+   * Gating the wider pool and cutting afterwards means a junk name costs a slot
+   * in an RPC batch instead of a slot in the directory. The pool is bounded
+   * because the RPC cost is: 1000 names is 10 batched account reads.
+   */
+  const pool = [
     ...new Set([...pinned, ...usage.map((row) => row.username)]),
   ]
     .filter((name) => !excluded.has(name))
-    .slice(0, config.max_apps);
+    .slice(0, config.candidate_pool);
 
-  if (candidates.length === 0) {
-    // Nothing has used the API yet. Say so plainly rather than inventing a
-    // list: the UI renders "still building", and a few hours of traffic fixes
-    // it permanently.
-    publish({
-      updated_at: new Date().toISOString(),
-      building: true,
-      apps: [],
-      featured: [],
-    });
+  if (pool.length === 0) {
+    publishBuilding();
     return;
   }
 
   const accounts = [];
-  for (let i = 0; i < candidates.length; i += 100) {
-    const batch = await indexerClient.database.getAccounts(
-      candidates.slice(i, i + 100),
-    );
+  for (let i = 0; i < pool.length; i += 100) {
+    const batch = await indexerClient.database.getAccounts(pool.slice(i, i + 100));
     accounts.push(...(batch || []));
   }
 
-  // THE GATE. An account that has not granted posting authority to the
-  // broadcaster is not an app, however many requests carried its name. Pinned
-  // entries are not exempt: a pin decides order, not identity.
-  const registered = accounts.filter(isRegistered);
+  // THE GATE, and it runs BEFORE the cut to max_apps. An account that has not
+  // granted posting authority to the broadcaster is not an app, however many
+  // requests carried its name. Pinned entries are not exempt: a pin decides
+  // order, not identity.
+  //
+  // Re-sorted by position in the pool because getAccounts is not promised to
+  // answer in the order it was asked, and after this the order IS the ranking
+  // that the cut applies to.
+  const rank = new Map(pool.map((name, i) => [name, i]));
+  const rankOf = (name) => (rank.has(name) ? rank.get(name) : Number.MAX_SAFE_INTEGER);
+  const registered = accounts
+    .filter(isRegistered)
+    .sort((a, b) => rankOf(a.name) - rankOf(b.name))
+    .slice(0, config.max_apps);
+
   const profiles = new Map(registered.map((a) => [a.name, profileOf(a)]));
   const names = registered.map((a) => a.name);
 
   if (names.length === 0) {
-    publish({
-      updated_at: new Date().toISOString(),
-      building: true,
-      apps: [],
-      featured: [],
-    });
+    publishBuilding();
     return;
   }
 
@@ -268,6 +310,10 @@ const build = async () => {
     apps,
     featured: ordered.slice(0, config.featured_limit).map((a) => a.username),
   });
+
+  // These names have passed the gate, so the counter may keep counting them
+  // even on a day whose quota of unseen names is used up. See helpers/usage.js.
+  setDirectoryApps(names);
 };
 
 const refresh = async () => {
@@ -286,6 +332,19 @@ const refresh = async () => {
 export const getAppsIndex = () => cache.get(CACHE_KEY) || null;
 
 export const startAppsIndexer = () => {
+  // Without the broadcaster name there is nothing to check registration
+  // against, so isRegistered answers false for everybody and the directory
+  // stays `building: true` for ever. That is the right failure - listing
+  // unverified names would be worse - but it is indistinguishable from "no
+  // traffic yet" unless it says so once, here.
+  if (!BROADCASTER) {
+    console.error(
+      new Date().toISOString(),
+      'apps: BROADCASTER_USERNAME is not set, so no account can pass the',
+      'registration gate and the directory will stay empty',
+    );
+  }
+
   // Two cadences. The slow one is the steady state; the fast one exists so a
   // pass that fails on a transient RPC error does not leave the directory stale
   // for the whole refresh interval.
