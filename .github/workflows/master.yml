@@ -73,7 +73,10 @@ jobs:
           # Without this both the old process and the swarm task bind $API_PORT
           # on the first deploy and one of them loses. Harmless once pm2 has no
           # such process, which is why it is not guarded by anything cleverer.
-          pm2 delete api || true
+          # `pm2 delete` alone leaves the SAVED dump intact, so on a host with
+          # `pm2 startup` configured the old process comes back after a reboot
+          # and binds the port again. `pm2 save` rewrites the dump without it.
+          { pm2 delete api && pm2 save; } || true
           # `docker stack deploy` resolves the tag itself; the explicit pull is
           # redundant. It stays only so the image is warm before the swarm
           # update starts, which shortens the start-first window.
@@ -87,22 +90,34 @@ jobs:
           # through the rollout, so that check can pass on the task being replaced
           # before the new one has run at all. UpdateStatus is about the update
           # itself, which is the actual question being asked.
-          # A task actually in Running. `--filter desired-state=running` alone
-          # is not an answer: during a start-first update the OUTGOING task is
-          # still desired-running, which is why the update state gates an
-          # update. On a first deploy there is no update and no old task, so
-          # this is the right question there.
+          # Is a task running THE IMAGE THIS DEPLOY ASKED FOR?
+          #
+          # `--filter desired-state=running` alone is not an answer: under
+          # start-first the OUTGOING task is still desired-running, so both a
+          # `completed` left over from the previous deploy and a reset `none`
+          # could be answered by the task being replaced.
+          #
+          # Compared against the SERVICE SPEC's image rather than the digest the
+          # build job pushed. Those two are not the same string - swarm resolves
+          # the tag itself and records its own digest, which differs from what
+          # buildx reports pushing - so matching the pushed digest would fail
+          # EVERY deploy, which is a worse failure than the one being fixed.
+          # `stack deploy` writes the newly resolved image into the spec, so the
+          # spec names the incoming image while the outgoing task still carries
+          # the previous one. Verified: mid-rollout the old task is Running on
+          # the old image and this correctly reports not-yet.
           running() {
-            docker service ps hivesigner-api_api \
-              --filter desired-state=running --format '{{.CurrentState}}' \
-              2>/dev/null | grep -q '^Running'
+            want=$(docker service inspect hivesigner-api_api \
+              --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}' 2>/dev/null) || return 1
+            [ -n "$want" ] || return 1
+            docker service ps hivesigner-api_api --no-trunc \
+              --filter desired-state=running \
+              --format '{{.CurrentState}} {{.Image}}' 2>/dev/null \
+              | grep '^Running' | grep -qF "$want"
           }
-          # Running is NOT ready. A swarm task reports Running as soon as the
-          # container starts, which is before the image's HEALTHCHECK has left
-          # its start period - so a container with a broken health endpoint
-          # could make this workflow succeed and then go unhealthy and restart
-          # behind it. 0 healthy, 1 unhealthy, 2 not on this node, 3 still
-          # starting. A container with no healthcheck has nothing to wait for.
+          # Running is not by itself ready, so the container's health is read
+          # too: 0 healthy, 1 unhealthy, 2 not on this node, 3 still starting. A
+          # container with no healthcheck has nothing to wait for.
           health() {
             cid=$(docker ps -q \
               --filter "label=com.docker.swarm.service.name=hivesigner-api_api" \
@@ -121,15 +136,15 @@ jobs:
           for i in $(seq 1 40); do
             state=$(docker service inspect hivesigner-api_api --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}none{{end}}' 2>/dev/null || echo unknown)
             case "$state" in
-              rollback_started|rollback_completed|paused)
+              rollback_started|rollback_completed|rollback_paused|paused)
                 echo "update did not take: $state"
                 docker service ps hivesigner-api_api --no-trunc | head -5
                 exit 1 ;;
             esac
-            # `none` is a NEW service, which has no update status - including
-            # while its only task is failing to start. Both paths still have to
-            # see a task that is running AND healthy.
-            if [ "$state" = "completed" ] || { [ "$state" = "none" ] && running; }; then
+            # BOTH paths require a running task on the digest this run pushed,
+            # so neither the previous deploy's `completed` nor a reset `none`
+            # can be satisfied by the outgoing task.
+            if running; then
               health
               case "$?" in
                 0)

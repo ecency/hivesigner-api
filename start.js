@@ -58,6 +58,10 @@ const shutdown = () => {
   if (shuttingDown) return;
   shuttingDown = true;
   const finish = () => process.exit(0);
+  // Idle keep-alive sockets do NOT count as in-flight, but server.close waits
+  // for them, so without this every shutdown sat out the keep-alive timeout for
+  // connections with nothing on them.
+  if (server.closeIdleConnections) server.closeIdleConnections();
   server.close(finish);
   setTimeout(finish, 8000).unref();
 };
