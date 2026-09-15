@@ -79,15 +79,28 @@ jobs:
           # update starts, which shortens the start-first window.
           docker pull ecency/hivesigner-api:latest
           docker stack deploy -c docker-compose.yml hivesigner-api
-          # stack deploy returns as soon as the update is ACCEPTED, so without
-          # this the workflow reports success over a task that is crash-looping.
+          # `stack deploy` returns as soon as the update is ACCEPTED, so without
+          # a wait the workflow reports success over a task that never starts.
+          #
+          # Waiting on `docker service ps --filter desired-state=running` is NOT
+          # enough: with `order: start-first` the OLD task is still desired-running
+          # through the rollout, so that check can pass on the task being replaced
+          # before the new one has run at all. UpdateStatus is about the update
+          # itself, which is the actual question being asked.
           for i in $(seq 1 30); do
-            state=$(docker service ps hivesigner-api_api --format '{{.CurrentState}}' --filter desired-state=running | head -1)
+            state=$(docker service inspect hivesigner-api_api --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}none{{end}}' 2>/dev/null || echo unknown)
             case "$state" in
-              Running*) echo "service running: $state"; exit 0 ;;
+              completed|none)
+                echo "update state: $state"
+                docker service ps hivesigner-api_api --filter desired-state=running
+                exit 0 ;;
+              rollback_started|rollback_completed|paused)
+                echo "update did not take: $state"
+                docker service ps hivesigner-api_api --no-trunc | head -5
+                exit 1 ;;
             esac
             sleep 5
           done
-          echo "service did not reach Running:"
+          echo "update did not complete in time:"
           docker service ps hivesigner-api_api --no-trunc | head -5
           exit 1
