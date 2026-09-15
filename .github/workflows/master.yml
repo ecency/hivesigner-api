@@ -91,36 +91,69 @@ jobs:
           # is not an answer: during a start-first update the OUTGOING task is
           # still desired-running, which is why the update state gates an
           # update. On a first deploy there is no update and no old task, so
-          # this is exactly the right question.
+          # this is the right question there.
           running() {
             docker service ps hivesigner-api_api \
               --filter desired-state=running --format '{{.CurrentState}}' \
               2>/dev/null | grep -q '^Running'
           }
-          for i in $(seq 1 30); do
+          # Running is NOT ready. A swarm task reports Running as soon as the
+          # container starts, which is before the image's HEALTHCHECK has left
+          # its start period - so a container with a broken health endpoint
+          # could make this workflow succeed and then go unhealthy and restart
+          # behind it. 0 healthy, 1 unhealthy, 2 not on this node, 3 still
+          # starting. A container with no healthcheck has nothing to wait for.
+          health() {
+            cid=$(docker ps -q \
+              --filter "label=com.docker.swarm.service.name=hivesigner-api_api" \
+              2>/dev/null | head -1)
+            [ -n "$cid" ] || return 2
+            status=$(docker inspect -f \
+              '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+              "$cid" 2>/dev/null || echo unknown)
+            case "$status" in
+              healthy|none) return 0 ;;
+              unhealthy) return 1 ;;
+              *) return 3 ;;
+            esac
+          }
+          # Long enough to cover the healthcheck's start period and first probes.
+          for i in $(seq 1 40); do
             state=$(docker service inspect hivesigner-api_api --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}none{{end}}' 2>/dev/null || echo unknown)
             case "$state" in
-              completed)
-                echo "update state: completed"
-                docker service ps hivesigner-api_api --filter desired-state=running
-                exit 0 ;;
-              none)
-                # A NEW service has no update status - including while its only
-                # task is failing to start. Accepting `none` on sight reported
-                # success for a deploy that never ran, so it has to wait for a
-                # task rather than for the absence of an update.
-                if running; then
-                  echo "first deploy: task running"
-                  docker service ps hivesigner-api_api --filter desired-state=running
-                  exit 0
-                fi ;;
               rollback_started|rollback_completed|paused)
                 echo "update did not take: $state"
                 docker service ps hivesigner-api_api --no-trunc | head -5
                 exit 1 ;;
             esac
+            # `none` is a NEW service, which has no update status - including
+            # while its only task is failing to start. Both paths still have to
+            # see a task that is running AND healthy.
+            if [ "$state" = "completed" ] || { [ "$state" = "none" ] && running; }; then
+              health
+              case "$?" in
+                0)
+                  echo "deploy ok (update state: $state)"
+                  docker service ps hivesigner-api_api --filter desired-state=running
+                  exit 0 ;;
+                1)
+                  echo "container is unhealthy"
+                  docker service ps hivesigner-api_api --no-trunc | head -5
+                  exit 1 ;;
+                2)
+                  # Task is on another node, so its health cannot be read from
+                  # here. Fall back to the update state, which is the best
+                  # signal available in that case.
+                  if [ "$state" = "completed" ]; then
+                    echo "deploy ok (update completed; task not on this node)"
+                    exit 0
+                  fi ;;
+              esac
+            fi
             sleep 5
           done
-          echo "service did not reach a running state in time:"
+          echo "service did not become healthy in time:"
           docker service ps hivesigner-api_api --no-trunc | head -5
+          docker ps --filter "label=com.docker.swarm.service.name=hivesigner-api_api" \
+            --format '{{.Names}} {{.Status}}' || true
           exit 1
