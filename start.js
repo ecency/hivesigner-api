@@ -37,6 +37,30 @@ app.get('/*', (req, res) => {
   res.redirect(`https://${process.env.BROADCAST_NETWORK === 'mainnet' ? 'hivesigner.com' : 'testnet.hivesigner.com'}${req.url}`);
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Listening on port ${port}`);
 });
+
+/**
+ * Stop accepting, let in-flight requests finish, exit.
+ *
+ * This is NOT optional once node is PID 1. The kernel applies no default signal
+ * disposition to PID 1, so a process there only reacts to a signal it has
+ * explicitly handled - node running as PID 1 with no handler simply IGNORES
+ * SIGTERM. Measured: `docker stop -t 10` took 10.3s and exited 137, meaning
+ * every deploy killed in-flight requests, broadcasts included.
+ *
+ * The cap sits under docker's default 10s grace so a slow client cannot make
+ * the shutdown outlast it and end in SIGKILL anyway.
+ */
+let shuttingDown = false;
+const shutdown = () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const finish = () => process.exit(0);
+  server.close(finish);
+  setTimeout(finish, 8000).unref();
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
