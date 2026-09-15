@@ -12,9 +12,11 @@
   "apps": {
     "featured_limit": 8,
     "shortlist_size": 40,
-    "post_pages": 25,
+    "post_pages": 50,
     "refresh_minutes": 360,
     "pinned": [],
-    "excluded": []
+    "excluded": [],
+    "site_check_concurrency": 8,
+    "retry_minutes": 5
   }
 }

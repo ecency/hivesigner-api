@@ -7,6 +7,11 @@ RUN yarn install --frozen-lockfile --non-interactive --production=true
 
 COPY . .
 
+# Drop root for the runtime. The app only reads from the image, so nothing here
+# needs write access; the install above already ran as root and is complete.
+# `node` is a non-root user the official image ships.
+USER node
+
 ENV API_PORT=3000
 EXPOSE 3000
 

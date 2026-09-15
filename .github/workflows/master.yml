@@ -69,5 +69,25 @@ jobs:
           export BROADCAST_NETWORK=$BROADCAST_NETWORK
           export BROADCASTER_USERNAME=$BROADCASTER_USERNAME
           export BROADCASTER_POSTING_WIF=$BROADCASTER_POSTING_WIF
+          # One-time: this host ran the API under pm2 before the move to swarm.
+          # Without this both the old process and the swarm task bind $API_PORT
+          # on the first deploy and one of them loses. Harmless once pm2 has no
+          # such process, which is why it is not guarded by anything cleverer.
+          pm2 delete api || true
+          # `docker stack deploy` resolves the tag itself; the explicit pull is
+          # redundant. It stays only so the image is warm before the swarm
+          # update starts, which shortens the start-first window.
           docker pull ecency/hivesigner-api:latest
           docker stack deploy -c docker-compose.yml hivesigner-api
+          # stack deploy returns as soon as the update is ACCEPTED, so without
+          # this the workflow reports success over a task that is crash-looping.
+          for i in $(seq 1 30); do
+            state=$(docker service ps hivesigner-api_api --format '{{.CurrentState}}' --filter desired-state=running | head -1)
+            case "$state" in
+              Running*) echo "service running: $state"; exit 0 ;;
+            esac
+            sleep 5
+          done
+          echo "service did not reach Running:"
+          docker service ps hivesigner-api_api --no-trunc | head -5
+          exit 1

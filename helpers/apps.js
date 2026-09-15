@@ -30,11 +30,25 @@
  * than account state; see the note in the README.
  */
 
-import { client } from './client';
+import { Client } from '@hiveio/dhive';
 import { cache } from './cache';
+import { mapLimit, safeFetch } from './safe-fetch';
 import cjson from '../config.json' assert { type: 'json' };
 
 const { apps: config } = cjson;
+
+/**
+ * The indexer's OWN client, not the one the auth path shares.
+ *
+ * Its calls are bulk reads of hundreds of accounts, which routinely pass the
+ * shared client's 4s timeout; dhive then rotates the node for EVERYONE, so a
+ * directory refresh was moving the server that token verification runs against.
+ * A longer timeout and a separate client keeps the two apart.
+ */
+const indexerClient = new Client(
+  ['https://api.hive.blog', 'https://rpc.mahdiyari.info', 'https://api.deathwing.me'],
+  { timeout: 15000, failoverThreshold: 3, consoleOnFailover: true },
+);
 
 const ORACLE = 'hivesigner';
 const TOP_APPS_PERMLINK = 'top-apps';
@@ -80,7 +94,31 @@ const clientOf = (json_metadata) => {
   return raw.split('/')[0].trim().toLowerCase();
 };
 
-const baseDomain = (host) => host.toLowerCase().replace(/^www\./, '').split(':')[0];
+/**
+ * The registrable part of a host, near enough for a same-site check.
+ *
+ * Comparing whole hosts called `example.com` -> `app.example.com` a hijack,
+ * which is a normal thing for a site to do. This keeps the last two labels, and
+ * three for the handful of two-part public suffixes these apps actually use, so
+ * `foo.co.uk` and `foo.com.br` are not collapsed to `co.uk`.
+ */
+const TWO_PART_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'me.uk', 'ac.uk', 'gov.uk',
+  'com.au', 'net.au', 'org.au',
+  'com.br', 'com.mx', 'com.ar', 'com.tr', 'com.pl',
+  'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in',
+  'com.cn', 'com.hk', 'com.sg', 'com.tw', 'com.ua',
+]);
+
+const baseDomain = (host) => {
+  const bare = host.toLowerCase().split(':')[0].replace(/\.$/, '');
+  const labels = bare.split('.');
+  if (labels.length <= 2) return bare;
+  const lastTwo = labels.slice(-2).join('.');
+  return TWO_PART_SUFFIXES.has(lastTwo)
+    ? labels.slice(-3).join('.')
+    : lastTwo;
+};
 
 /**
  * Compare an app account to a client string.
@@ -127,7 +165,7 @@ const readDirectory = async () => {
   let start = '';
   // A bound only, in case a node ignores `start`; the checks below end the loop.
   for (let page = 0; page < 200; page += 1) {
-    const rows = await client.call('condenser_api', 'get_following', [
+    const rows = await indexerClient.call('condenser_api', 'get_following', [
       ORACLE,
       start,
       'blog',
@@ -170,7 +208,7 @@ const readRecentPosts = async (pages) => {
       query.start_author = author;
       query.start_permlink = permlink;
     }
-    const posts = await client.call('bridge', 'get_ranked_posts', query);
+    const posts = await indexerClient.call('bridge', 'get_ranked_posts', query);
     if (!Array.isArray(posts) || posts.length === 0) break;
     posts.forEach((post) => {
       authors.add(post.author);
@@ -191,7 +229,7 @@ const readGrants = async (sample) => {
   // footgun besides.
   const accounts = [];
   for (let i = 0; i < sample.length; i += 100) {
-    const batch = await client.database.getAccounts(sample.slice(i, i + 100));
+    const batch = await indexerClient.database.getAccounts(sample.slice(i, i + 100));
     accounts.push(...(batch || []));
   }
   const grants = new Map();
@@ -211,7 +249,7 @@ const readGrants = async (sample) => {
  * that answers 403 to anything without a browser fingerprint.
  */
 const checkSite = async (website) => {
-  if (!website) return { status: 'none' };
+  if (!website) return { status: 'no_website' };
   const raw = String(website).trim();
   const candidate = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
   let url;
@@ -224,16 +262,17 @@ const checkSite = async (website) => {
     return { status: 'invalid' };
   }
   try {
-    const res = await fetch(url, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(12000),
-      headers: { 'user-agent': 'hivesigner-app-directory' },
-    });
+    // NOT a plain fetch: this URL was chosen by the app account, so every hop
+    // is resolved and screened first. See helpers/safe-fetch.js.
+    const res = await safeFetch(url);
     const from = baseDomain(url.host);
     const to = baseDomain(new URL(res.url).host);
     if (from !== to) return { status: 'redirected', to };
     return { status: 'ok', host: to };
   } catch (e) {
+    // A blocked address is not the same as a dead site, and an operator
+    // reading `rejected` should be able to tell them apart.
+    if (/^blocked /.test(e.message)) return { status: 'blocked' };
     return { status: 'unreachable' };
   }
 };
@@ -241,7 +280,7 @@ const checkSite = async (website) => {
 /** The hand-curated list, as the fallback and the cold-start answer. */
 const readCuratedList = async () => {
   try {
-    const content = await client.database.call('get_content', [ORACLE, TOP_APPS_PERMLINK]);
+    const content = await indexerClient.database.call('get_content', [ORACLE, TOP_APPS_PERMLINK]);
     const { data } = parseJson(content.json_metadata);
     return Array.isArray(data) ? data.filter(isUsername) : [];
   } catch (e) {
@@ -255,10 +294,16 @@ const publish = (payload) => {
   cache.set(CACHE_KEY, payload, 0);
 };
 
+const excludedSet = () => new Set(config.excluded || []);
+
 /** Fast pass, so the endpoint answers within a second of boot. */
 const seedFromCuratedList = async () => {
   if (cache.get(CACHE_KEY)) return;
-  const curated = await readCuratedList();
+  // `excluded` has to bite here too. An operator who adds a compromised account
+  // to it would otherwise still see a fresh process publish it, in both lists,
+  // for as long as the first ranking pass takes.
+  const blocked = excludedSet();
+  const curated = (await readCuratedList()).filter((n) => !blocked.has(n));
   if (!curated.length) return;
   publish({
     updated_at: new Date().toISOString(),
@@ -275,8 +320,11 @@ const rank = async () => {
   ]);
   const { grants, scanned } = await readGrants(recent.authors);
 
-  const excluded = new Set(config.excluded || []);
+  const excluded = excludedSet();
   const pinned = (config.pinned || []).filter(isUsername);
+  // The published directory is filtered too: the shortlist alone left an
+  // excluded account visible in the full list.
+  const published = directory.filter((name) => !excluded.has(name));
 
   // Candidates are the registered directory PLUS anything people are actually
   // granting authority to. The @hivesigner follow list was last curated years
@@ -293,23 +341,28 @@ const rank = async () => {
   const wanted = [...new Set([...pinned, ...shortlist])];
   const accounts = [];
   for (let i = 0; i < wanted.length; i += 100) {
-    const batch = await client.database.getAccounts(wanted.slice(i, i + 100));
+    const batch = await indexerClient.database.getAccounts(wanted.slice(i, i + 100));
     accounts.push(...(batch || []));
   }
   const profiles = new Map(accounts.map((a) => [a.name, profileOf(a)]));
 
-  const checked = await Promise.all(
-    wanted.map(async (username) => {
-      const profile = profiles.get(username) || {};
-      const site = await checkSite(profile.website);
-      return {
-        username,
-        profile,
-        site,
-        grants: grants.get(username) || 0,
-        matched: activityOf(username, profile.website, recent.clients),
-      };
-    }),
+  // Capped, not Promise.all: forty parallel fetches tripped a
+  // MaxListenersExceededWarning, which is the runtime saying the same thing.
+  const inspect = async (username) => {
+    const profile = profiles.get(username) || {};
+    const site = await checkSite(profile.website);
+    return {
+      username,
+      profile,
+      site,
+      grants: grants.get(username) || 0,
+      matched: activityOf(username, profile.website, recent.clients),
+    };
+  };
+  const checked = await mapLimit(
+    wanted,
+    config.site_check_concurrency,
+    inspect,
   );
 
   // A client string belongs to ONE account: the one with the most grants. Any
@@ -330,8 +383,19 @@ const rank = async () => {
 
   // BOTH gates, and the activity one is the important half. A resolving domain
   // only says somebody still pays for the name; posts say the app is running.
+  //
+  // `postsLastPass` keeps a low-volume app steady. The sample covers roughly
+  // eight hours, so an app that publishes a couple of posts a day lands on zero
+  // in some passes and would otherwise appear and vanish between refreshes.
+  const previous = cache.get(CACHE_KEY);
+  const featuredLastPass = new Set(
+    (previous && previous.source === 'ranked' ? previous.featured || [] : [])
+      .filter((row) => row.posts > 0)
+      .map((row) => row.username),
+  );
   const isEligible = (row) => pinned.includes(row.username)
-    || (row.site.status === 'ok' && row.posts > 0);
+    || (row.site.status === 'ok'
+      && (row.posts > 0 || featuredLastPass.has(row.username)));
 
   const eligible = checked.filter(isEligible);
 
@@ -354,7 +418,7 @@ const rank = async () => {
     method: {
       accounts_scanned: scanned,
       posts_sampled: [...recent.clients.values()].reduce((a, b) => a + b, 0),
-      directory_size: directory.length,
+      directory_size: published.length,
     },
     featured: ordered.slice(0, config.featured_limit).map((row) => ({
       username: row.username,
@@ -363,7 +427,7 @@ const rank = async () => {
       grants: row.grants,
       posts: row.posts,
     })),
-    directory,
+    directory: published,
     // Named WITH the reason, so a person can see why something dropped off
     // instead of guessing. This is how the hijacked domains were found.
     rejected: checked
@@ -387,19 +451,34 @@ const refresh = async () => {
   try {
     await rank();
     console.log(new Date().toISOString(), 'apps: directory ranked');
+    return true;
   } catch (e) {
     // Never throws to the caller: a failed refresh leaves the previous answer
     // in place, and an unhandled rejection here would take the API down.
     console.error(new Date().toISOString(), 'apps: ranking failed', e.message);
+    return false;
   }
 };
 
 export const getAppsIndex = () => cache.get(CACHE_KEY) || null;
 
 export const startAppsIndexer = () => {
-  refresh();
-  const timer = setInterval(refresh, config.refresh_minutes * 60 * 1000);
-  // Do not hold the process open for this.
-  if (timer.unref) timer.unref();
-  return timer;
+  // Two cadences. The slow one is the steady state. The fast one exists because
+  // a pass that fails at boot would otherwise leave the endpoint answering 503
+  // (or serving nothing but the curated list) for the whole refresh interval -
+  // six hours - over what is often a transient RPC failure.
+  let timer = null;
+
+  const tick = async () => {
+    const ranked = await refresh();
+    const minutes = ranked ? config.refresh_minutes : config.retry_minutes;
+    timer = setTimeout(tick, minutes * 60 * 1000);
+    if (timer.unref) timer.unref();
+  };
+
+  tick();
+
+  return () => {
+    if (timer) clearTimeout(timer);
+  };
 };

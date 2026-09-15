@@ -27,5 +27,8 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 5
+        # NO max_attempts. With a cap and a single replica, five crashes inside
+        # the window left the service down until the next deploy - which for an
+        # OAuth API means every app's sign-in stays broken until someone
+        # notices. vision_vapi on EU runs uncapped for the same reason.
         window: 60s
