@@ -191,9 +191,18 @@ const requestOnce = (url, timeoutMs) => new Promise((resolve, reject) => {
       timeout: timeoutMs,
     },
     (res) => {
-      // Nothing here reads a body, and an undrained one holds the socket open.
-      res.resume();
-      resolve({ status: res.statusCode, location: res.headers.location });
+      // Take what is needed from the HEAD of the response and then DESTROY it.
+      //
+      // `res.resume()` was wrong: it drains the body over the network rather
+      // than ending it, so a site that streams for ever kept its socket - and
+      // its bandwidth - after safeFetch had already resolved and mapLimit had
+      // handed the slot to the next check. Sockets accumulated across
+      // refreshes. Measured: returned in 60ms, then 60 more chunks arrived and
+      // the process could not exit.
+      const status = res.statusCode;
+      const { location } = res.headers;
+      res.destroy();
+      resolve({ status, location });
     },
   );
   req.on('timeout', () => req.destroy(new Error('timeout')));
