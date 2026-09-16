@@ -53,23 +53,34 @@ const FLUSH_MS = 60 * 1000;
 /** A ceiling on the per-day user set, so one app cannot grow it without bound. */
 const MAX_USERS_PER_DAY = 50000;
 /**
- * Two ceilings on DISTINCT APP NAMES per day, because one is not enough.
+ * Ceilings on DISTINCT APP NAMES per day.
  *
  * Names are caller-chosen (see above), so without a ceiling one account
  * rotating the name on every request creates a new bucket each time -
  * unbounded memory and a file that grows until the disk does not.
  *
- * But a single ceiling is racy in the other direction: once a day is full,
+ * But a ceiling alone is racy in the other direction: once a day is full,
  * every name not already in it is uncounted until midnight UTC, and the name
  * that loses is whichever app's first request of the day happens to arrive
  * late. An attacker can make that happen on purpose by filling the day at
- * 00:00. So a name that something OTHER than the caller vouches for - it is in
- * the directory the indexer last built, or it was seen yesterday - is allowed
- * past the low ceiling. The high one is absolute and applies to everybody, so
- * a day cannot grow without bound by inheriting the day before it.
+ * 00:00. So the names in the directory the indexer last built are NOT subject
+ * to any ceiling: every one of them has passed the registration gate, and the
+ * set is bounded by max_apps, so it cannot grow a day without bound.
+ *
+ * Names seen the day before are deliberately NOT vouched for. An earlier
+ * version let them past the low ceiling, and junk inherited itself: 500 fresh
+ * names a day, each replayed the next day, reached the absolute ceiling in
+ * four days and then locked real apps out of the count. Yesterday's junk is
+ * still junk.
+ *
+ * What bounds junk at the source is the PER-USER ceiling: a user introduces at
+ * most a handful of never-seen names a day. Real people use one to three apps;
+ * a flood comes from a few accounts rotating names, so it is capped where it
+ * originates rather than shared out over everybody.
  */
 const MAX_UNKNOWN_APPS_PER_DAY = 500;
 const MAX_APPS_PER_DAY = 2000;
+const MAX_NEW_NAMES_PER_USER_PER_DAY = 5;
 
 const FILE = process.env.USAGE_FILE || join('/var/app/data', 'usage.json');
 
@@ -85,8 +96,16 @@ const today = () => new Date().toISOString().slice(0, 10);
  * After a restart the live Set starts empty, so the day's distinct-user figure
  * is max(restored, live): an undercount for the remainder of that day, which is
  * the price of not persisting usernames.
+ *
+ * meta: Map<'YYYY-MM-DD', { unknown, introduced: Map<user, count> }>
+ *
+ * Bookkeeping for the ceilings, in memory only. `unknown` is how many names
+ * outside the directory the day has taken on; `introduced` is how many
+ * never-seen names each user has put on record today. Neither is persisted:
+ * after a restart the day's counts start over, which errs toward counting.
  */
 const days = new Map();
+const meta = new Map();
 let dirty = false;
 let flushTimer = null;
 let loaded = false;
@@ -105,26 +124,39 @@ export const setDirectoryApps = (names) => {
   directoryApps = new Set((names || []).filter(isUsername));
 };
 
-const dayBefore = (day) => new Date(Date.parse(`${day}T00:00:00Z`) - 86400000)
-  .toISOString()
-  .slice(0, 10);
-
-/** Has anything other than the caller's own say-so put this name on record? */
-const isVouchedFor = (day, app) => {
-  if (directoryApps.has(app)) return true;
-  const previous = days.get(dayBefore(day));
-  return !!(previous && previous.has(app));
+const metaOf = (day) => {
+  if (!meta.has(day)) meta.set(day, { unknown: 0, introduced: new Map() });
+  return meta.get(day);
 };
 
-const bucket = (day, app) => {
+/**
+ * The day's row for `app`, creating it if the ceilings allow.
+ *
+ * `trusted` is for names read back from disk: they were admitted once already,
+ * so only the absolute ceiling applies. A live request for a name not yet on
+ * record today has to clear all three, unless the name is in the directory.
+ */
+const bucket = (day, app, { user, trusted = false } = {}) => {
   if (!days.has(day)) days.set(day, new Map());
   const apps = days.get(day);
-  if (!apps.has(app)) {
-    // See the two ceilings above. Absolute first, so nothing is exempt from it.
+  if (apps.has(app)) return apps.get(app);
+
+  if (!directoryApps.has(app)) {
+    // Absolute first, so nothing outside the directory is exempt from it.
     if (apps.size >= MAX_APPS_PER_DAY) return null;
-    if (apps.size >= MAX_UNKNOWN_APPS_PER_DAY && !isVouchedFor(day, app)) return null;
-    apps.set(app, { requests: 0, users: new Set(), restoredUsers: 0 });
+    const m = metaOf(day);
+    if (!trusted) {
+      if (m.unknown >= MAX_UNKNOWN_APPS_PER_DAY) return null;
+      // A name nobody has seen before is only taken on the say-so of the user
+      // presenting it, and each user gets a few of those a day, not a stream.
+      if (!isUsername(user)) return null;
+      const introduced = m.introduced.get(user) || 0;
+      if (introduced >= MAX_NEW_NAMES_PER_USER_PER_DAY) return null;
+      m.introduced.set(user, introduced + 1);
+    }
+    m.unknown += 1;
   }
+  apps.set(app, { requests: 0, users: new Set(), restoredUsers: 0 });
   return apps.get(app);
 };
 
@@ -133,6 +165,7 @@ const prune = () => {
     .toISOString()
     .slice(0, 10);
   [...days.keys()].filter((d) => d < cutoff).forEach((d) => days.delete(d));
+  [...meta.keys()].filter((d) => d < cutoff).forEach((d) => meta.delete(d));
 };
 
 const serialize = () => {
@@ -186,7 +219,7 @@ export const loadUsage = () => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
       Object.entries(apps || {}).forEach(([app, row]) => {
         if (!isUsername(app) || !row || typeof row !== 'object') return;
-        const entry = bucket(day, app);
+        const entry = bucket(day, app, { trusted: true });
         // A file with more names in a day than the absolute ceiling allows -
         // hand-edited, or written by a build with a higher ceiling. Skipping
         // the overflow keeps the rest of the history; dereferencing null here
@@ -209,8 +242,8 @@ export const loadUsage = () => {
 /** Record one authenticated request made on behalf of `user` by `app`. */
 export const recordAppRequest = (app, user) => {
   if (!isUsername(app)) return;
-  const entry = bucket(today(), app);
-  // Day is full: see MAX_APPS_PER_DAY.
+  const entry = bucket(today(), app, { user });
+  // Refused by a ceiling: see the note above them.
   if (!entry) return;
   entry.requests += 1;
   if (isUsername(user) && entry.users.size < MAX_USERS_PER_DAY) {
@@ -222,19 +255,37 @@ export const recordAppRequest = (app, user) => {
 /**
  * Apps seen in the last `windowDays`, most used first.
  *
+ * An app with no request inside the window is simply absent: that is how the
+ * directory drops an app that has gone quiet, without anybody curating it.
+ *
  * Ranked on DISTINCT USERS rather than requests: a single chatty integration
  * polling /api/me should not outrank an app a thousand people actually use.
+ *
+ * `firstSeen` looks at the whole retained history, not just the window, so a
+ * name that has been around for a month is not reported as new merely because
+ * the window is a week.
  */
-export const usageRanking = ({ windowDays = 30 } = {}) => {
+export const usageRanking = ({ windowDays = 7 } = {}) => {
   const cutoff = new Date(Date.now() - windowDays * 86400000)
     .toISOString()
     .slice(0, 10);
+  const firstSeen = new Map();
+  days.forEach((apps, day) => {
+    apps.forEach((row, app) => {
+      const seen = firstSeen.get(app);
+      if (!seen || day < seen) firstSeen.set(app, day);
+    });
+  });
   const totals = new Map();
   days.forEach((apps, day) => {
     if (day < cutoff) return;
     apps.forEach((row, app) => {
       const t = totals.get(app) || {
-        username: app, users: 0, requests: 0, lastSeen: '',
+        username: app,
+        users: 0,
+        requests: 0,
+        lastSeen: '',
+        firstSeen: firstSeen.get(app),
       };
       // Summed across days: the same person on two days counts twice, which is
       // "active users" rather than "unique people". Storing enough to do better

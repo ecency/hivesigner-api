@@ -195,6 +195,10 @@ const publish = (payload) => {
  *
  * Said plainly rather than by inventing a list: the UI renders "still
  * building", and a few hours of traffic fixes it permanently.
+ *
+ * Returns false so the caller re-runs on the fast cadence. The first live
+ * deploy built once at boot from an empty file, answered "building", and then
+ * sat on the six-hour timer while traffic piled up in the usage file behind it.
  */
 const publishBuilding = () => {
   publish({
@@ -203,14 +207,22 @@ const publishBuilding = () => {
     apps: [],
     featured: [],
   });
+  return false;
 };
 
 const build = async () => {
   const excluded = new Set(config.excluded || []);
   const pinned = (config.pinned || []).filter(isUsername);
 
-  const usage = usageRanking({ windowDays: config.usage_window_days });
+  // Only apps seen inside the active window are candidates at all. An app
+  // that has gone a week without a single request drops out of the directory
+  // on the next build, and comes back the moment it is used again; nobody has
+  // to curate departures.
+  const usage = usageRanking({ windowDays: config.active_days });
   const usageByApp = new Map(usage.map((row) => [row.username, row]));
+  const newCutoff = new Date(Date.now() - config.active_days * 86400000)
+    .toISOString()
+    .slice(0, 10);
 
   /**
    * The names checked for registration, ranked, and deliberately a much wider
@@ -231,10 +243,7 @@ const build = async () => {
     .filter((name) => !excluded.has(name))
     .slice(0, config.candidate_pool);
 
-  if (pool.length === 0) {
-    publishBuilding();
-    return;
-  }
+  if (pool.length === 0) return publishBuilding();
 
   const accounts = [];
   for (let i = 0; i < pool.length; i += 100) {
@@ -260,10 +269,7 @@ const build = async () => {
   const profiles = new Map(registered.map((a) => [a.name, profileOf(a)]));
   const names = registered.map((a) => a.name);
 
-  if (names.length === 0) {
-    publishBuilding();
-    return;
-  }
+  if (names.length === 0) return publishBuilding();
 
   const inspect = async (username) => {
     const profile = profiles.get(username) || {};
@@ -278,7 +284,10 @@ const build = async () => {
       ...(site.to ? { redirects_to: site.to } : {}),
       users: stats ? stats.users : 0,
       requests: stats ? stats.requests : 0,
+      first_seen: stats ? stats.firstSeen : null,
       last_seen: stats ? stats.lastSeen : null,
+      // First seen inside the window: a newcomer the UI can badge as such.
+      new: !!(stats && stats.firstSeen >= newCutoff),
     };
   };
 
@@ -306,21 +315,23 @@ const build = async () => {
   publish({
     updated_at: new Date().toISOString(),
     building: false,
-    window_days: config.usage_window_days,
+    window_days: config.active_days,
     apps,
     featured: ordered.slice(0, config.featured_limit).map((a) => a.username),
   });
 
-  // These names have passed the gate, so the counter may keep counting them
-  // even on a day whose quota of unseen names is used up. See helpers/usage.js.
+  // These names have passed the gate, so the counter keeps counting them
+  // whatever the day's ceilings say. See helpers/usage.js.
   setDirectoryApps(names);
+  return true;
 };
 
+/** True when a directory was published; false when still building or failed. */
 const refresh = async () => {
   try {
-    await build();
-    console.log(new Date().toISOString(), 'apps: directory rebuilt');
-    return true;
+    const built = await build();
+    console.log(new Date().toISOString(), built ? 'apps: directory rebuilt' : 'apps: still building');
+    return built;
   } catch (e) {
     // Never throws to the caller: a failed refresh leaves the previous answer
     // in place, and an unhandled rejection here would take the API down.
@@ -345,9 +356,10 @@ export const startAppsIndexer = () => {
     );
   }
 
-  // Two cadences. The slow one is the steady state; the fast one exists so a
-  // pass that fails on a transient RPC error does not leave the directory stale
-  // for the whole refresh interval.
+  // Two cadences. The slow one is the steady state; the fast one is for a pass
+  // that failed on a transient RPC error, and for one that had nothing to list
+  // yet, so neither leaves the directory empty or stale for the whole refresh
+  // interval.
   let timer = null;
 
   const tick = async () => {
