@@ -342,6 +342,21 @@ export const recordAppRequest = (app, user) => {
   scheduleFlush();
 };
 
+/**
+ * The earliest UTC day on record, or null with no history at all.
+ *
+ * `new` needs it: on a fresh deployment every app is first seen on day one,
+ * and without this every single entry wore the badge for a week. An app is
+ * new only if the record was already running before it appeared.
+ */
+export const historyStart = () => {
+  let first = null;
+  days.forEach((apps, day) => {
+    if (apps.size > 0 && (first === null || day < first)) first = day;
+  });
+  return first;
+};
+
 /** The first UTC day inside a window of `windowDays` ending today. */
 export const windowStart = (windowDays) => new Date(
   Date.now() - (Math.max(1, windowDays) - 1) * 86400000,

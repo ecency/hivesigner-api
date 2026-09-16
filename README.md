@@ -33,7 +33,8 @@ directory ranks on the sum of each day's distinct-user count over the last
 six days), so a person active on three days counts three times. An app with no
 request inside that window drops off on the next build and comes back the
 moment it is used again, so departures need no curating. An app first seen
-inside the window is marked `"new": true`.
+inside the window, and after the record itself began, is marked `"new": true`;
+on a fresh deployment nothing is new until the history is older than the app.
 
 **Registration decides who is on it.** `req.proxy` is `signed_message.app`, a
 string chosen by whoever built the token. The signature proves the *user*
