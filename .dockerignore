@@ -1,0 +1,12 @@
+# node_modules MUST be first: COPY . . runs after `yarn install --production`,
+# so a checkout that has its own node_modules (any dev box) overwrites the
+# image's production install with host-built modules.
+**/node_modules
+**/.git
+**/.github
+**/.vscode
+**/.idea
+**/npm-debug.log
+**/yarn-error.log
+**/.env
+**/docker-compose.yml
