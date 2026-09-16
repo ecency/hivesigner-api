@@ -4,11 +4,18 @@ import { authenticate, verifyPermissions } from '../helpers/middleware';
 import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
 import { decodeMemo, issue } from '../helpers/token';
 import { client, bclient, getAccount } from '../helpers/client';
+import { getAppsIndex } from '../helpers/apps';
+import { usageRecorder } from '../helpers/usage';
 import cjson from '../config.json' assert { type: 'json' };
 
 const { authorized_operations, token_expiration } = cjson;
 
 const router = Router();
+
+// Mounted HERE rather than on the app, so only /api/* counts. Globally it also
+// counted /_health, which let a caller register an app name without touching a
+// single API route.
+router.use(usageRecorder);
 const privateKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
 
 /** Get my account details */
@@ -137,6 +144,30 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
         },
       );
   }
+});
+
+/**
+ * The app directory, ranked from real usage.
+ *
+ * Public and unauthenticated: it is the same list for everyone, and the UI
+ * reads it before anybody has signed in. Ranking happens on a timer in
+ * helpers/apps.js, so this only ever reads the last good answer.
+ */
+router.get('/apps', (req, res) => {
+  const index = getAppsIndex();
+  if (!index) {
+    // Only before the first build completes, which is seconds. The UI treats a
+    // failure here as "could not reach the directory" and offers a retry; there
+    // is no fallback list on either side any more.
+    return res.status(503).json({
+      error: 'unavailable',
+      error_description: 'The app directory is still being built',
+    });
+  }
+  // Short enough that a change is picked up the same day, long enough that this
+  // is not recomputed per visitor. The payload is identical for every caller.
+  res.set('Cache-Control', 'public, max-age=300');
+  return res.json(index);
 });
 
 /** Request app access token */
