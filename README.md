@@ -11,12 +11,13 @@ use them:
 {
   "updated_at": "...",
   "building": false,
-  "window_days": 30,
+  "window_days": 7,
   "featured": ["ecency.app", "peakd.app", "..."],
   "apps": [
     { "username": "ecency.app", "name": "Ecency", "about": "...",
       "website": "https://ecency.com", "site": "ok",
-      "users": 412, "requests": 9310, "last_seen": "2026-09-15" }
+      "users": 412, "requests": 9310,
+      "first_seen": "2026-08-01", "last_seen": "2026-09-15", "new": false }
   ]
 }
 ```
@@ -27,7 +28,12 @@ Two signals. Both are needed.
 
 **Usage orders it.** Every authenticated request carries an app name as
 `req.proxy`. `helpers/usage.js` counts that per app per UTC day. The
-directory ranks on distinct users.
+directory ranks on the sum of each day's distinct-user count over the last
+`apps.active_days` UTC days, today included (7 means today plus the previous
+six days), so a person active on three days counts three times. An app with no
+request inside that window drops off on the next build and comes back the
+moment it is used again, so departures need no curating. An app first seen
+inside the window is marked `"new": true`.
 
 **Registration decides who is on it.** `req.proxy` is `signed_message.app`, a
 string chosen by whoever built the token. The signature proves the *user*
@@ -42,9 +48,10 @@ The gate runs on a wide ranked pool (`apps.candidate_pool`) *before* the cut to
 than a slot in the directory.
 
 There is no follow list, no post-metadata scraping and **no fallback list**. A
-fresh deployment answers `"building": true` with an empty list for a few hours
-until traffic fills it, then is correct permanently. A fallback would be a
-second code path that only runs when nobody is watching.
+fresh deployment answers `"building": true` with an empty list and rebuilds on
+the fast cadence (`apps.retry_minutes`) until traffic fills it, then is correct
+permanently. A fallback would be a second code path that only runs when nobody
+is watching.
 
 ### What counts as an "app"
 
@@ -89,10 +96,25 @@ day and folded to a number when written, so the file never records who used
 what. The cost is that a restart mid-day loses that day's deduplication.
 
 Counts are cheap to inflate, since the name is caller-chosen, so they are
-treated as a ranking signal over unverified names and nothing more. Two ceilings
-bound the damage: at most 500 *unseen* names a day and 2000 in total. A name
-already in the built directory, or seen the day before, is allowed past the
-first, so filling a day cannot stop a real app from being counted.
+treated as a ranking signal over unverified names and nothing more. Three
+ceilings bound the damage: each user may put at most 5 names a day on record
+that were not already there that day, a day takes at most 500 names from
+outside the trusted set, and 2000 in total.
+
+The **trusted set** is every name the indexer has verified on chain as
+registered, from its last candidate pool. Those names are exempt from all three
+ceilings, and the set is written to `trusted-apps.json` beside the usage file
+and read back before the counts, so a restart does not reopen the ceilings to
+known apps. Names seen the day before are *not* trusted on that basis: letting
+them through let junk inherit itself day over day.
+
+Refusal is not silent either. The first 200 names the ceilings turn away each
+day are kept, and the next build runs them through the same registration check
+as everything else. So a real app that registers on a day someone has filled
+is verified within one build, trusted from then on, and counted from its next
+request. Filling a day costs the attacker accounts and buys them at most one
+build interval of delay for a newcomer, and nothing at all against a known
+app.
 
 ## Learn more 
 

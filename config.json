@@ -13,7 +13,7 @@
     "featured_limit": 8,
     "max_apps": 100,
     "candidate_pool": 1000,
-    "usage_window_days": 30,
+    "active_days": 7,
     "refresh_minutes": 360,
     "retry_minutes": 5,
     "site_check_concurrency": 8,

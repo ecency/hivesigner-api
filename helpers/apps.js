@@ -64,7 +64,9 @@
 import { Client } from '@hiveio/dhive';
 import { cache } from './cache';
 import { mapLimit, safeFetch } from './safe-fetch';
-import { setDirectoryApps, usageRanking } from './usage';
+import {
+  refusedNames, setTrustedApps, usageRanking, windowStart,
+} from './usage';
 import cjson from '../config.json' assert { type: 'json' };
 
 const { apps: config } = cjson;
@@ -84,6 +86,8 @@ const indexerClient = new Client(
 );
 
 const BROADCASTER = process.env.BROADCASTER_USERNAME;
+/** Defaulted here as well as in config.json: a config without it must not throw on every build. */
+const ACTIVE_DAYS = Number(config.active_days) || 7;
 
 const USERNAME_RE = /^[a-z][a-z0-9.-]{2,15}$/;
 const isUsername = (v) => typeof v === 'string' && USERNAME_RE.test(v);
@@ -195,22 +199,42 @@ const publish = (payload) => {
  *
  * Said plainly rather than by inventing a list: the UI renders "still
  * building", and a few hours of traffic fixes it permanently.
+ *
+ * Returns false so the caller re-runs on the fast cadence. The first live
+ * deploy built once at boot from an empty file, answered "building", and then
+ * sat on the six-hour timer while traffic piled up in the usage file behind it.
  */
 const publishBuilding = () => {
+  // Never over a directory that has already been served. "Nothing to list"
+  // after a good answer means the usage file was lost or every app has been
+  // silent for a week; the last good answer beats an empty one in both cases,
+  // and that is what the README promises about failed rebuilds.
+  const current = cache.get(CACHE_KEY);
+  if (current && !current.building) return false;
   publish({
     updated_at: new Date().toISOString(),
     building: true,
     apps: [],
     featured: [],
   });
+  return false;
 };
 
 const build = async () => {
+  // No broadcaster name means nothing can pass the gate, so there is no point
+  // spending RPC on a pass whose answer is known. The startup log says why.
+  if (!BROADCASTER) return publishBuilding();
+
   const excluded = new Set(config.excluded || []);
   const pinned = (config.pinned || []).filter(isUsername);
 
-  const usage = usageRanking({ windowDays: config.usage_window_days });
+  // Only apps seen inside the active window are candidates at all. An app
+  // that has gone a week without a single request drops out of the directory
+  // on the next build, and comes back the moment it is used again; nobody has
+  // to curate departures.
+  const usage = usageRanking({ windowDays: ACTIVE_DAYS });
   const usageByApp = new Map(usage.map((row) => [row.username, row]));
+  const newCutoff = windowStart(ACTIVE_DAYS);
 
   /**
    * The names checked for registration, ranked, and deliberately a much wider
@@ -225,16 +249,20 @@ const build = async () => {
    * in an RPC batch instead of a slot in the directory. The pool is bounded
    * because the RPC cost is: 1000 names is 10 batched account reads.
    */
-  const pool = [
+  //
+  // Names the counter REFUSED are in the pool too, after everything ranked,
+  // with room reserved so a flood of counted junk cannot crowd them out. A
+  // real app that registered on a day the ceilings were full is found here,
+  // verified on chain, and trusted from then on - see helpers/usage.js.
+  const refused = refusedNames().filter((name) => !excluded.has(name));
+  const ranked = [
     ...new Set([...pinned, ...usage.map((row) => row.username)]),
   ]
     .filter((name) => !excluded.has(name))
-    .slice(0, config.candidate_pool);
+    .slice(0, Math.max(0, config.candidate_pool - refused.length));
+  const pool = [...new Set([...ranked, ...refused])];
 
-  if (pool.length === 0) {
-    publishBuilding();
-    return;
-  }
+  if (pool.length === 0) return publishBuilding();
 
   const accounts = [];
   for (let i = 0; i < pool.length; i += 100) {
@@ -252,18 +280,19 @@ const build = async () => {
   // that the cut applies to.
   const rank = new Map(pool.map((name, i) => [name, i]));
   const rankOf = (name) => (rank.has(name) ? rank.get(name) : Number.MAX_SAFE_INTEGER);
-  const registered = accounts
-    .filter(isRegistered)
+  const verified = accounts.filter(isRegistered);
+  // Every registered name in the pool is trusted by the counter from now on,
+  // whether or not it makes the directory: the counter's ceilings are for
+  // names nobody has verified, and these have been. Bounded by the pool.
+  setTrustedApps(verified.map((a) => a.name));
+  const registered = verified
     .sort((a, b) => rankOf(a.name) - rankOf(b.name))
     .slice(0, config.max_apps);
 
   const profiles = new Map(registered.map((a) => [a.name, profileOf(a)]));
   const names = registered.map((a) => a.name);
 
-  if (names.length === 0) {
-    publishBuilding();
-    return;
-  }
+  if (names.length === 0) return publishBuilding();
 
   const inspect = async (username) => {
     const profile = profiles.get(username) || {};
@@ -278,7 +307,10 @@ const build = async () => {
       ...(site.to ? { redirects_to: site.to } : {}),
       users: stats ? stats.users : 0,
       requests: stats ? stats.requests : 0,
+      first_seen: stats ? stats.firstSeen : null,
       last_seen: stats ? stats.lastSeen : null,
+      // First seen inside the window: a newcomer the UI can badge as such.
+      new: !!(stats && stats.firstSeen >= newCutoff),
     };
   };
 
@@ -306,21 +338,20 @@ const build = async () => {
   publish({
     updated_at: new Date().toISOString(),
     building: false,
-    window_days: config.usage_window_days,
+    window_days: ACTIVE_DAYS,
     apps,
     featured: ordered.slice(0, config.featured_limit).map((a) => a.username),
   });
 
-  // These names have passed the gate, so the counter may keep counting them
-  // even on a day whose quota of unseen names is used up. See helpers/usage.js.
-  setDirectoryApps(names);
+  return true;
 };
 
+/** True when a directory was published; false when still building or failed. */
 const refresh = async () => {
   try {
-    await build();
-    console.log(new Date().toISOString(), 'apps: directory rebuilt');
-    return true;
+    const built = await build();
+    console.log(new Date().toISOString(), built ? 'apps: directory rebuilt' : 'apps: still building');
+    return built;
   } catch (e) {
     // Never throws to the caller: a failed refresh leaves the previous answer
     // in place, and an unhandled rejection here would take the API down.
@@ -345,9 +376,10 @@ export const startAppsIndexer = () => {
     );
   }
 
-  // Two cadences. The slow one is the steady state; the fast one exists so a
-  // pass that fails on a transient RPC error does not leave the directory stale
-  // for the whole refresh interval.
+  // Two cadences. The slow one is the steady state; the fast one is for a pass
+  // that failed on a transient RPC error, and for one that had nothing to list
+  // yet, so neither leaves the directory empty or stale for the whole refresh
+  // interval.
   let timer = null;
 
   const tick = async () => {
