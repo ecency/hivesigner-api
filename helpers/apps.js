@@ -65,7 +65,7 @@ import { Client } from '@hiveio/dhive';
 import { cache } from './cache';
 import { mapLimit, safeFetch } from './safe-fetch';
 import {
-  refusedNames, setTrustedApps, usageRanking, windowStart,
+  historyStart, refusedNames, setTrustedApps, usageRanking, windowStart,
 } from './usage';
 import cjson from '../config.json' assert { type: 'json' };
 
@@ -235,6 +235,9 @@ const build = async () => {
   const usage = usageRanking({ windowDays: ACTIVE_DAYS });
   const usageByApp = new Map(usage.map((row) => [row.username, row]));
   const newCutoff = windowStart(ACTIVE_DAYS);
+  // "New" means it appeared while the record was already running. On day one
+  // of a deployment everything is first seen today, and that is not news.
+  const recordStart = historyStart();
 
   /**
    * The names checked for registration, ranked, and deliberately a much wider
@@ -309,8 +312,14 @@ const build = async () => {
       requests: stats ? stats.requests : 0,
       first_seen: stats ? stats.firstSeen : null,
       last_seen: stats ? stats.lastSeen : null,
-      // First seen inside the window: a newcomer the UI can badge as such.
-      new: !!(stats && stats.firstSeen >= newCutoff),
+      // First seen inside the window AND after the record began: a newcomer
+      // the UI can badge as such.
+      new: !!(
+        stats
+        && stats.firstSeen >= newCutoff
+        && recordStart !== null
+        && stats.firstSeen > recordStart
+      ),
     };
   };
 
