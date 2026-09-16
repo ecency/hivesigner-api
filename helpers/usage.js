@@ -81,8 +81,33 @@ const MAX_USERS_PER_DAY = 50000;
 const MAX_UNKNOWN_APPS_PER_DAY = 500;
 const MAX_APPS_PER_DAY = 2000;
 const MAX_NEW_NAMES_PER_USER_PER_DAY = 5;
+/**
+ * How many REFUSED names a day are remembered for the indexer to look at.
+ *
+ * The ceilings above can be filled on purpose: a hundred accounts naming five
+ * junk names each close the day to anything not already trusted, and a real
+ * app registering that day would never be counted, so never trusted, so never
+ * counted - for as long as the flood keeps up. So refusal is not silent: the
+ * first few hundred refused names are kept, the indexer runs them through the
+ * same on-chain registration check as everything else, and a registered one
+ * is trusted from then on. Junk costs the indexer an RPC batch, not the
+ * newcomer its place.
+ *
+ * The sample takes ONE name per presenting user, so saturating it with junk
+ * costs a further couple of hundred accounts on top of the hundred that filled
+ * the day, every day. That is a cost, not a proof; the operator's way past a
+ * flood that sustained is `pinned`, which is verified on every build.
+ */
+const MAX_REFUSED_PER_DAY = 200;
 
 const FILE = process.env.USAGE_FILE || join('/var/app/data', 'usage.json');
+/**
+ * The trusted names, persisted beside the counts. Without this every restart
+ * opened a window from boot to the first successful build in which nothing was
+ * trusted, and a day an attacker had already filled refused the real apps too.
+ */
+const TRUSTED_FILE = process.env.USAGE_TRUSTED_FILE
+  || join(dirname(FILE), 'trusted-apps.json');
 
 const USERNAME_RE = /^[a-z][a-z0-9.-]{2,15}$/;
 const isUsername = (v) => typeof v === 'string' && USERNAME_RE.test(v);
@@ -97,12 +122,17 @@ const today = () => new Date().toISOString().slice(0, 10);
  * is max(restored, live): an undercount for the remainder of that day, which is
  * the price of not persisting usernames.
  *
- * meta: Map<'YYYY-MM-DD', { unknown, introduced: Map<user, count> }>
+ * meta: Map<'YYYY-MM-DD', { unknown, introduced: Map<user, count>, refused: Set }>
  *
- * Bookkeeping for the ceilings, in memory only. `unknown` is how many names
- * outside the directory the day has taken on; `introduced` is how many
- * never-seen names each user has put on record today. Neither is persisted:
- * after a restart the day's counts start over, which errs toward counting.
+ * Bookkeeping for the ceilings. `unknown` is how many names outside the
+ * trusted set the day has taken on; `introduced` is how many names not yet on
+ * record today each user has put there; `refused` is a bounded sample of the
+ * names the ceilings turned away, one per presenting user (`refusedBy`). None
+ * of it is written to disk, but `unknown`
+ * is rebuilt from the counts at load, so a restart leaves that ceiling where
+ * it was, while `introduced` genuinely starts over and gives every user a
+ * fresh per-user allowance. Nobody outside can trigger a restart, so the
+ * asymmetry is tolerable; it is just not "everything resets".
  */
 const days = new Map();
 const meta = new Map();
@@ -111,47 +141,105 @@ let flushTimer = null;
 let loaded = false;
 
 /**
- * The names in the directory the indexer last published.
+ * The names the indexer has verified as registered: every name in its last
+ * candidate pool whose account had granted posting authority to the
+ * broadcaster, which is a superset of the directory it publishes.
  *
  * Set by helpers/apps.js after a successful build, rather than imported from
  * it: apps.js reads usageRanking from here, so a read back the other way would
- * be a cycle. Every name in it has passed the registration gate, so it is a
- * safe allowlist and it is bounded by max_apps.
+ * be a cycle. Bounded by the indexer's candidate pool. Persisted, and read
+ * back before the counts, so the ceilings never apply to a known app.
  */
-let directoryApps = new Set();
+let trustedApps = new Set();
 
-export const setDirectoryApps = (names) => {
-  directoryApps = new Set((names || []).filter(isUsername));
+const writeTrusted = () => {
+  try {
+    mkdirSync(dirname(TRUSTED_FILE), { recursive: true });
+    const tmp = `${TRUSTED_FILE}.tmp`;
+    writeFileSync(tmp, JSON.stringify([...trustedApps]));
+    renameSync(tmp, TRUSTED_FILE);
+  } catch (e) {
+    console.error(new Date().toISOString(), 'usage: trusted write failed', e.message);
+  }
+};
+
+export const setTrustedApps = (names) => {
+  trustedApps = new Set((names || []).filter(isUsername));
+  writeTrusted();
+};
+
+const loadTrusted = () => {
+  try {
+    const raw = JSON.parse(readFileSync(TRUSTED_FILE, 'utf8'));
+    trustedApps = new Set((Array.isArray(raw) ? raw : []).filter(isUsername));
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      console.error(new Date().toISOString(), 'usage: trusted load failed', e.message);
+    }
+  }
 };
 
 const metaOf = (day) => {
-  if (!meta.has(day)) meta.set(day, { unknown: 0, introduced: new Map() });
+  if (!meta.has(day)) {
+    meta.set(day, {
+      unknown: 0, introduced: new Map(), refused: new Set(), refusedBy: new Set(),
+    });
+  }
   return meta.get(day);
+};
+
+const refuse = (day, app, user) => {
+  const m = metaOf(day);
+  if (isUsername(user) && !m.refusedBy.has(user) && m.refused.size < MAX_REFUSED_PER_DAY) {
+    m.refused.add(app);
+    m.refusedBy.add(user);
+  }
+  return null;
+};
+
+/**
+ * Names the ceilings refused today and yesterday, for the indexer to check
+ * against the chain. Yesterday too, because a build runs every few hours and
+ * a name refused at 23:50 should not be forgotten at midnight.
+ */
+export const refusedNames = () => {
+  const now = today();
+  const before = new Date(Date.parse(`${now}T00:00:00Z`) - 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const out = new Set();
+  [now, before].forEach((day) => {
+    const m = meta.get(day);
+    if (m) m.refused.forEach((name) => out.add(name));
+  });
+  return [...out];
 };
 
 /**
  * The day's row for `app`, creating it if the ceilings allow.
  *
- * `trusted` is for names read back from disk: they were admitted once already,
- * so only the absolute ceiling applies. A live request for a name not yet on
- * record today has to clear all three, unless the name is in the directory.
+ * `restoring` is for names read back from disk: they were admitted once
+ * already, so only the absolute ceiling applies. A live request for a name not
+ * yet on record today has to clear all three, unless the name is trusted.
  */
-const bucket = (day, app, { user, trusted = false } = {}) => {
+const bucket = (day, app, { user, restoring = false } = {}) => {
   if (!days.has(day)) days.set(day, new Map());
   const apps = days.get(day);
   if (apps.has(app)) return apps.get(app);
 
-  if (!directoryApps.has(app)) {
-    // Absolute first, so nothing outside the directory is exempt from it.
-    if (apps.size >= MAX_APPS_PER_DAY) return null;
+  if (!trustedApps.has(app)) {
+    // Absolute first, so nothing outside the trusted set is exempt from it.
+    if (apps.size >= MAX_APPS_PER_DAY) return refuse(day, app, user);
     const m = metaOf(day);
-    if (!trusted) {
-      if (m.unknown >= MAX_UNKNOWN_APPS_PER_DAY) return null;
-      // A name nobody has seen before is only taken on the say-so of the user
+    if (!restoring) {
+      if (m.unknown >= MAX_UNKNOWN_APPS_PER_DAY) return refuse(day, app, user);
+      // A name not yet on record today is only taken on the say-so of the user
       // presenting it, and each user gets a few of those a day, not a stream.
-      if (!isUsername(user)) return null;
+      // "Not yet on record today", not "never seen": replaying yesterday's
+      // names costs the same allowance, which is the stricter reading.
+      if (!isUsername(user)) return refuse(day, app, user);
       const introduced = m.introduced.get(user) || 0;
-      if (introduced >= MAX_NEW_NAMES_PER_USER_PER_DAY) return null;
+      if (introduced >= MAX_NEW_NAMES_PER_USER_PER_DAY) return refuse(day, app, user);
       m.introduced.set(user, introduced + 1);
     }
     m.unknown += 1;
@@ -213,13 +301,15 @@ const scheduleFlush = () => {
 export const loadUsage = () => {
   if (loaded) return;
   loaded = true;
+  // Before the counts, so rows for trusted apps are not tallied as unknown.
+  loadTrusted();
   try {
     const raw = JSON.parse(readFileSync(FILE, 'utf8'));
     Object.entries(raw || {}).forEach(([day, apps]) => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
       Object.entries(apps || {}).forEach(([app, row]) => {
         if (!isUsername(app) || !row || typeof row !== 'object') return;
-        const entry = bucket(day, app, { trusted: true });
+        const entry = bucket(day, app, { restoring: true });
         // A file with more names in a day than the absolute ceiling allows -
         // hand-edited, or written by a build with a higher ceiling. Skipping
         // the overflow keeps the rest of the history; dereferencing null here
@@ -252,8 +342,15 @@ export const recordAppRequest = (app, user) => {
   scheduleFlush();
 };
 
+/** The first UTC day inside a window of `windowDays` ending today. */
+export const windowStart = (windowDays) => new Date(
+  Date.now() - (Math.max(1, windowDays) - 1) * 86400000,
+)
+  .toISOString()
+  .slice(0, 10);
+
 /**
- * Apps seen in the last `windowDays`, most used first.
+ * Apps seen in the last `windowDays` UTC days, today included, most used first.
  *
  * An app with no request inside the window is simply absent: that is how the
  * directory drops an app that has gone quiet, without anybody curating it.
@@ -266,9 +363,7 @@ export const recordAppRequest = (app, user) => {
  * the window is a week.
  */
 export const usageRanking = ({ windowDays = 7 } = {}) => {
-  const cutoff = new Date(Date.now() - windowDays * 86400000)
-    .toISOString()
-    .slice(0, 10);
+  const cutoff = windowStart(windowDays);
   const firstSeen = new Map();
   days.forEach((apps, day) => {
     apps.forEach((row, app) => {
