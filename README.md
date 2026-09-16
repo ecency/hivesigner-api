@@ -28,8 +28,9 @@ Two signals. Both are needed.
 
 **Usage orders it.** Every authenticated request carries an app name as
 `req.proxy`. `helpers/usage.js` counts that per app per UTC day. The
-directory ranks on distinct users over the last `apps.active_days` UTC days,
-today included (7 means today plus the previous six days). An app with no
+directory ranks on the sum of each day's distinct-user count over the last
+`apps.active_days` UTC days, today included (7 means today plus the previous
+six days), so a person active on three days counts three times. An app with no
 request inside that window drops off on the next build and comes back the
 moment it is used again, so departures need no curating. An app first seen
 inside the window is marked `"new": true`.
