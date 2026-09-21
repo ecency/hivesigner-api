@@ -121,7 +121,7 @@ app.
 
 Homepage: https://hivesigner.com
 
-Documentation: https://docs.hivesigner.com
+Documentation: https://hivesigner.com/docs
 
 Hivesigner SDK: https://github.com/ecency/hivesigner-sdk
 
