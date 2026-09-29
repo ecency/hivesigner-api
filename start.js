@@ -3,10 +3,10 @@ import path from 'path';
 import bparser from 'body-parser';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
-import { strategy } from './helpers/middleware';
-import apis from './routes/api';
-import { startAppsIndexer } from './helpers/apps';
-import { flushUsage, loadUsage } from './helpers/usage';
+import { strategy } from './helpers/middleware.js';
+import apis from './routes/api.js';
+import { startAppsIndexer } from './helpers/apps.js';
+import { flushUsage, loadUsage } from './helpers/usage.js';
 
 const { json, urlencoded } = bparser;
 const __filename = fileURLToPath(import.meta.url);

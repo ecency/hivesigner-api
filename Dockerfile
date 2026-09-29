@@ -1,4 +1,4 @@
-FROM node:18.19.1-alpine
+FROM node:24-alpine
 
 WORKDIR /var/app
 
@@ -28,5 +28,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # child, so the signal never reached the app: `docker stop` waited out the full
 # grace period and then SIGKILLed it - measured at 30s, and true of every deploy
 # this service has had. For a broadcast API that means in-flight requests were
-# being killed on each release. Flags mirror the `start` script.
-CMD ["node", "--experimental-modules", "--experimental-json-modules", "--es-module-specifier-resolution=node", "start.js"]
+# being killed on each release. Same command as the `start` script.
+CMD ["node", "start.js"]
