@@ -1,7 +1,7 @@
 /* eslint-disable prefer-promise-reject-errors */
 import Promise from 'bluebird';
 import pkg from 'lodash';
-import { client, getAccount } from './client';
+import { getAccount } from './client.js';
 
 const { get, has } = pkg;
 
@@ -49,7 +49,7 @@ export const getAppProfile = (username) => new Promise((resolve, reject) => {
           metadata = {};
         }
       } catch (e) {
-        console.error(new Date().toISOString(), client.currentAddress, `Error parsing account posting_json ${username}`, e); // error in parsing
+        console.error(new Date().toISOString(), `Error parsing account posting_json ${username}`, e); // error in parsing
         metadata = {};
       }
     }

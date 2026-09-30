@@ -1,9 +1,9 @@
 import { createHash } from 'crypto';
 import pkg from 'lodash';
-import { verify } from './token';
-import { getAppProfile, b64uToB64 } from './utils';
-import { client, getAccount } from './client';
-import cjson from '../config.json' assert { type: 'json' };
+import { verify } from './token.js';
+import { getAppProfile, b64uToB64 } from './utils.js';
+import { getAccount } from './client.js';
+import cjson from '../config.json' with { type: 'json' };
 
 const { intersection, has } = pkg;
 const { authorized_operations } = cjson;
@@ -18,12 +18,12 @@ export const verifyPermissions = async (req, res, next) => {
   try {
     proxyAccount = await getAccount(req.proxy);
   } catch (e) {
-    console.error(new Date().toISOString(), client.currentAddress, 'Unable to load proxy account from hived', req.proxy, e);
+    console.error(new Date().toISOString(), 'Unable to load proxy account from hived', req.proxy, e);
   }
   try {
     userAccount = await getAccount(req.user, false);
   } catch (e) {
-    console.error(new Date().toISOString(), client.currentAddress, 'Unable to load user account from hived', req.user, e);
+    console.error(new Date().toISOString(), 'Unable to load user account from hived', req.user, e);
   }
 
   if (!has(proxyAccount, '[0].name') || !has(userAccount, '[0].name')) {
@@ -89,7 +89,7 @@ export const strategy = (req, res, next) => {
         const username = tokenObj.authors[0];
         verify(message, username, tokenObj.signatures[0], (err, isValid) => {
           if (!err && isValid) {
-            console.log(new Date().toISOString(), client.currentAddress, 'Token signature is valid', username);
+            console.log(new Date().toISOString(), 'Token signature is valid', username);
             let scope;
             if (signedMessage.type === 'login') scope = ['login'];
             if (['posting', 'offline', 'code', 'refresh']
@@ -115,7 +115,7 @@ export const strategy = (req, res, next) => {
         next();
       }
     } catch (e) {
-      console.log(new Date().toISOString(), client.currentAddress, 'Token signature decoding failed', token);
+      console.log(new Date().toISOString(), 'Token signature decoding failed', token);
       next();
     }
   } else {

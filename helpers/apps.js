@@ -61,29 +61,23 @@
  * it sends people.
  */
 
-import { Client } from '@hiveio/dhive';
-import { cache } from './cache';
-import { mapLimit, safeFetch } from './safe-fetch';
+import { callRPC } from '@ecency/sdk/hive';
+import { cache } from './cache.js';
+import { mapLimit, safeFetch } from './safe-fetch.js';
 import {
   historyStart, refusedNames, setTrustedApps, usageRanking, windowStart,
-} from './usage';
-import cjson from '../config.json' assert { type: 'json' };
+} from './usage.js';
+import cjson from '../config.json' with { type: 'json' };
 
 const { apps: config } = cjson;
 
 const CACHE_KEY = 'apps:index';
 
 /**
- * The indexer's OWN client, not the one the auth path shares.
- *
- * Its reads are bulk account lookups that can pass the shared client's 4s
- * timeout, and dhive rotates the node for EVERYONE on a timeout - so a
- * directory refresh was moving the server token verification runs against.
+ * Bulk account lookups can take longer than a normal read, so the indexer asks
+ * for its own timeout instead of the SDK default.
  */
-const indexerClient = new Client(
-  ['https://api.hive.blog', 'https://rpc.mahdiyari.info', 'https://api.deathwing.me'],
-  { timeout: 15000, failoverThreshold: 3, consoleOnFailover: true },
-);
+const INDEXER_TIMEOUT_MS = 15000;
 
 const BROADCASTER = process.env.BROADCASTER_USERNAME;
 /** Defaulted here as well as in config.json: a config without it must not throw on every build. */
@@ -269,7 +263,7 @@ const build = async () => {
 
   const accounts = [];
   for (let i = 0; i < pool.length; i += 100) {
-    const batch = await indexerClient.database.getAccounts(pool.slice(i, i + 100));
+    const batch = await callRPC('condenser_api.get_accounts', [pool.slice(i, i + 100)], INDEXER_TIMEOUT_MS);
     accounts.push(...(batch || []));
   }
 

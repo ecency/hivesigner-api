@@ -5,9 +5,6 @@ module.exports = {
     sourceType: "module",
     ecmaVersion: 2022,
     requireConfigFile: false,
-    babelOptions: {
-      plugins: ["@babel/plugin-syntax-import-assertions"],
-    },
   },
   env: {
     node: true,
@@ -18,5 +15,9 @@ module.exports = {
     "import/prefer-default-export": "off",
     "no-underscore-dangle": 0,
     "no-param-reassign": 0,
+    // Node ESM resolves relative imports only with their file extension.
+    "import/extensions": ["error", "ignorePackages"],
+    // The resolver predates package "exports", so it cannot see subpath entries.
+    "import/no-unresolved": ["error", { ignore: ["^@ecency/sdk/"] }],
   },
 };

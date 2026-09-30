@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { PrivateKey } from '@hiveio/dhive';
-import { authenticate, verifyPermissions } from '../helpers/middleware';
-import { getErrorMessage, isOperationAuthor } from '../helpers/utils';
-import { decodeMemo, issue } from '../helpers/token';
-import { client, bclient, getAccount } from '../helpers/client';
-import { getAppsIndex } from '../helpers/apps';
-import { usageRecorder } from '../helpers/usage';
-import cjson from '../config.json' assert { type: 'json' };
+import { PrivateKey, Transaction, TransactionTooLargeError } from '@ecency/sdk/hive';
+import { authenticate, verifyPermissions } from '../helpers/middleware.js';
+import { getErrorMessage, isOperationAuthor } from '../helpers/utils.js';
+import { decodeMemo, issue } from '../helpers/token.js';
+import { getAccount } from '../helpers/client.js';
+import { getAppsIndex } from '../helpers/apps.js';
+import { usageRecorder } from '../helpers/usage.js';
+import cjson from '../config.json' with { type: 'json' };
 
 const { authorized_operations, token_expiration } = cjson;
 
@@ -123,26 +123,39 @@ router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, re
       error_description: `This access_token allow you to broadcast transaction only for the account @${req.user}`,
     });
   } else {
-    bclient.broadcast.sendOperations(operations, privateKey)
-      .then(
-        (result) => {
-          console.log(new Date().toISOString(), bclient.currentAddress, `Broadcasted: success for @${req.user} from app @${req.proxy}`);
-          res.json({ result });
-        },
-        (err) => {
-          console.log(
-            new Date().toISOString(), bclient.currentAddress, operations.toString(),
-            `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
-            JSON.stringify(req.body),
-            JSON.stringify(err),
-          );
-          res.status(500).json({
-            error: 'server_error',
-            error_description: getErrorMessage(err) || err.message || err,
-            response: err,
-          });
-        },
+    try {
+      // Signed once; the SDK re-sends this same signed transaction to at most
+      // each node once and stops on a chain rejection.
+      const tx = new Transaction();
+      await operations.reduce(
+        (added, [name, body]) => added.then(() => tx.addOperation(name, body)),
+        Promise.resolve(),
       );
+      tx.sign(privateKey);
+      const { tx_id } = await tx.broadcast();
+      console.log(new Date().toISOString(), `Broadcasted: success for @${req.user} from app @${req.proxy}`);
+      res.json({ result: { id: tx_id } });
+    } catch (err) {
+      if (err instanceof TransactionTooLargeError) {
+        console.log(new Date().toISOString(), `Broadcast refused: ${err.size} bytes for @${req.user} from app @${req.proxy}`);
+        res.status(413).json({
+          error: 'transaction_too_large',
+          error_description: err.message,
+        });
+        return;
+      }
+      console.log(
+        new Date().toISOString(), operations.toString(),
+        `Broadcasted: failed for @${req.user} from app @${req.proxy}`,
+        JSON.stringify(req.body),
+        JSON.stringify(err),
+      );
+      res.status(500).json({
+        error: 'server_error',
+        error_description: getErrorMessage(err) || err.message || err,
+        response: err,
+      });
+    }
   }
 });
 
@@ -172,7 +185,7 @@ router.get('/apps', (req, res) => {
 
 /** Request app access token */
 router.all('/oauth2/token', authenticate(['code', 'refresh']), async (req, res) => {
-  console.log(new Date().toISOString(), client.currentAddress, `Issue tokens for user @${req.user} for @${req.proxy} app.`);
+  console.log(new Date().toISOString(), `Issue tokens for user @${req.user} for @${req.proxy} app.`);
   res.json({
     access_token: issue(req.proxy, req.user, 'posting'),
     refresh_token: issue(req.proxy, req.user, 'refresh'),
