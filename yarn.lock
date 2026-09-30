@@ -271,10 +271,10 @@
     "@babel/helper-string-parser" "^7.27.1"
     "@babel/helper-validator-identifier" "^7.27.1"
 
-"@ecency/sdk@^2.4.21":
-  version "2.4.21"
-  resolved "https://registry.yarnpkg.com/@ecency/sdk/-/sdk-2.4.21.tgz#deed6e20042a5e49745b6c30526fb541608bc862"
-  integrity sha512-jRj/pI696/qh1eF+bwfO2aiCK8M7y9Zi8+O7KgvKXsnHhem+qohGT/2qnkZRCfIcu1a0XV6fYq1VQyA8y8kNLA==
+"@ecency/sdk@^2.4.22":
+  version "2.4.22"
+  resolved "https://registry.yarnpkg.com/@ecency/sdk/-/sdk-2.4.22.tgz#c0db453e9cfce1e9f8ac50fd1508b7a1034da0c0"
+  integrity sha512-itkP7TZnT34FehFZQ+XdaFHJoFDAKKpr3DU/ZxlNnFqzIABKaIUe/Sa9LqYi0yaqD5OBFMAJT1++lyOJsoy6Iw==
   dependencies:
     "@noble/ciphers" "^2.1.1"
     "@noble/curves" "^2.0.1"
