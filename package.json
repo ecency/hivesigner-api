@@ -38,6 +38,6 @@
     "url": "https://github.com/ecency/hivesigner-api.git"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.3.0"
   }
 }
