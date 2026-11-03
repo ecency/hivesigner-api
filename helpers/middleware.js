@@ -133,22 +133,34 @@ export const authenticate = (roles) => async (req, res, next) => {
       error_description: 'The token has invalid role',
     });
   } else if (['code', 'refresh'].includes(req.role)) {
+    // Only the app the code was issued to may exchange it, proven by its
+    // secret. Every path where that cannot be checked refuses.
     let app;
     try {
       app = await getAppProfile(req.proxy);
     } catch (e) {
-      console.error(new Date().toISOString(), 'Failed to get app profile', e);
+      console.error(new Date().toISOString(), 'Failed to get app profile', req.proxy, e.message);
+      if (e.code !== 'not_app') {
+        // Temporary, so the app retries instead of dropping its refresh token.
+        res.status(503).json({
+          error: 'temporarily_unavailable',
+          error_description: 'Could not verify the app, try again',
+        });
+        return;
+      }
     }
 
-    const secret = req.query.client_secret || req.body.client_secret;
-    const secretHash = createHash('sha256').update(secret).digest('hex');
+    const secret = (req.query && req.query.client_secret) || (req.body && req.body.client_secret);
+    const secretHash = typeof secret === 'string' && secret
+      ? createHash('sha256').update(secret).digest('hex')
+      : null;
 
-    if (app && (!app.secret || secretHash !== app.secret)) {
+    if (!app || !app.secret || !secretHash || secretHash !== app.secret) {
       res.status(401).json({
         error: 'invalid_grant',
         error_description: 'The code or secret is not valid',
       });
-    } else if (app && app.allowed_ips && app.allowed_ips.length > 0) {
+    } else if (app.allowed_ips && app.allowed_ips.length > 0) {
       const reqIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
       if (intersection(app.allowed_ips, reqIp.replace(' ', '').split(',')).length > 0) {
         next();
