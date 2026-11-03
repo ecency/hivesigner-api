@@ -77,7 +77,25 @@ router.all('/decode', authenticate(), async (req, res) => {
 /** Broadcast transaction */
 router.post('/broadcast', authenticate('app'), verifyPermissions, async (req, res) => {
   const scope = req.scope.length ? req.scope : authorized_operations;
-  const { operations } = req.body;
+  const { operations } = req.body || {};
+
+  // Every check below reads operation[0] and operation[1]. A throw here is
+  // outside any try, so on Express 4 it would end the process.
+  const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  if (
+    !Array.isArray(operations)
+    || operations.length === 0
+    || !operations.every((op) => Array.isArray(op)
+      && op.length === 2
+      && typeof op[0] === 'string'
+      && isPlainObject(op[1]))
+  ) {
+    res.status(400).json({
+      error: 'invalid_request',
+      error_description: 'operations must be a non-empty list of [name, body] pairs',
+    });
+    return;
+  }
 
   let scopeIsValid = true;
   let requestIsValid = true;

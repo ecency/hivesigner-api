@@ -39,9 +39,21 @@ export const isOperationAuthor = (operation, query, username) => {
   return false;
 };
 
+const appProfileError = (code, message) => Object.assign(new Error(message), { code });
+
+/**
+ * The app's profile. Rejects with `code` 'lookup_failed' when the chain could
+ * not be read (worth a retry) and 'not_app' when the account is missing or is
+ * not an app (final).
+ */
 export const getAppProfile = (username) => new Promise((resolve, reject) => {
   getAccount(username).then((accounts) => {
-    let metadata;
+    // getAccount answers undefined, not an error, when every node failed.
+    if (!Array.isArray(accounts)) {
+      reject(appProfileError('lookup_failed', `Failed to load account @${username}`));
+      return;
+    }
+    let metadata = {};
     if (accounts[0] && accounts[0].posting_json_metadata) {
       try {
         metadata = JSON.parse(accounts[0].posting_json_metadata);
@@ -62,14 +74,14 @@ export const getAppProfile = (username) => new Promise((resolve, reject) => {
         metadata = {};
       }
     }
-    if (metadata.profile && metadata.profile.type && metadata.profile.type === 'app') {
+    if (metadata && metadata.profile && metadata.profile.type === 'app') {
       resolve(metadata.profile);
     } else {
-      reject(`The account @${username} is not an application`);
+      reject(appProfileError('not_app', `The account @${username} is not an application`));
     }
   }).catch((e) => {
-    console.log(e);
-    reject(`Failed to load account @${username}`, e);
+    console.error(new Date().toISOString(), `Failed to load account @${username}`, e);
+    reject(appProfileError('lookup_failed', `Failed to load account @${username}`));
   });
 });
 
