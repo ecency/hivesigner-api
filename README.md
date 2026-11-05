@@ -142,7 +142,8 @@ message, so the challenge cannot be changed after the user approved.
   already sends a token there), but anyone can claim a custom scheme on a
   device: register only callbacks you control, preferably verified App Links
   or Universal Links.
-- Every failure answers `401 invalid_grant`.
+- Every PKCE failure answers `401 invalid_grant` (an `allowed_ips` mismatch
+  keeps its `401 unauthorized_access`).
 - A code with a challenge is accepted only here, never as a token at `/api/me`.
 - Used codes are remembered in memory, which is enough for one replica. Running
   more replicas needs a shared store (see `helpers/middleware.js`).

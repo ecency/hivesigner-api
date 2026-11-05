@@ -201,6 +201,9 @@ export const strategy = (req, res, next) => {
 };
 
 export const authenticate = (roles) => async (req, res, next) => {
+  // Judged once: asked twice, a second boundary between the calls could pass
+  // the code the first call refused and leave the answer without a reason.
+  const pkceFailure = req.pkce ? pkceProblem(req.pkce, param(req, 'code_verifier')) : null;
   const role = Array.isArray(roles) && req.role && roles.includes(req.role)
     ? req.role : roles;
 
@@ -216,10 +219,10 @@ export const authenticate = (roles) => async (req, res, next) => {
       error: 'invalid_grant',
       error_description: 'The code can only be exchanged at /api/oauth2/token',
     });
-  } else if (req.pkce && pkceProblem(req.pkce, param(req, 'code_verifier'))) {
+  } else if (pkceFailure) {
     res.status(401).json({
       error: 'invalid_grant',
-      error_description: pkceProblem(req.pkce, param(req, 'code_verifier')),
+      error_description: pkceFailure,
     });
   } else if (['code', 'refresh'].includes(req.role)) {
     // Only the app the code was issued to may exchange it, proven by its
