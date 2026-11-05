@@ -117,6 +117,45 @@ request. Filling a day costs the attacker accounts and buys them at most one
 build interval of delay for a newcomer, and nothing at all against a known
 app.
 
+## PKCE on the code exchange: `POST /api/oauth2/token`
+
+A code can carry a PKCE challenge (RFC 7636). The authorize page puts
+`code_challenge` and `code_challenge_method: "S256"` inside the code's signed
+message, so the challenge cannot be changed after the user approved.
+
+| Code | Needs | Single use | Age limit | Refresh token |
+| --- | --- | --- | --- | --- |
+| No challenge (every app today) | `client_secret` | no | none | yes |
+| Challenge, app has a secret | `client_secret` and `code_verifier` | yes | 10 min (+5 for clocks) | yes |
+| Challenge, app has no secret (native app) | `code_verifier` | yes | 10 min (+5 for clocks) | no |
+| Challenge, app has a secret and `pkce_public: true` | `code_verifier` (secret optional) | yes | 10 min (+5 for clocks) | only with the secret |
+
+- `code_verifier` must be 43 to 128 characters of `A-Z a-z 0-9 - . _ ~`, and
+  `BASE64URL(SHA256(code_verifier))` must equal the challenge. Only `S256`.
+- `pkce_public: true` in the app profile is for an app that has a server (with
+  the secret) and a native app (without it) on one account. Only the boolean
+  `true` counts. A secret that is sent must be the right one.
+- An app account with an IP allowlist (`allowed_ips`) always needs the
+  secret: the address check reads a header the caller can set, so it cannot be
+  the only proof. Such an account cannot serve a native app.
+- Used codes are kept in memory. A restart forgets them, so a code exchanged
+  just before a restart could be exchanged once more until it expires, by
+  whoever also holds its verifier.
+- A code signed with `scope: "login"` (the user approved sign-in only) is
+  exchanged for a login token and no refresh token, with or without PKCE.
+- `pkce_public` opens the exchange to whoever holds a code and its verifier.
+  For an https or loopback callback that adds nothing new (the token flow
+  already sends a token there), but anyone can claim a custom scheme on a
+  device: register only callbacks you control, preferably verified App Links
+  or Universal Links.
+- Every PKCE failure answers `401 invalid_grant` (an `allowed_ips` mismatch
+  keeps its `401 unauthorized_access`).
+- A code with a challenge is accepted only here, never as a token at `/api/me`.
+- Running more replicas needs a shared store for used codes (see
+  `helpers/middleware.js`).
+
+Full guide: https://hivesigner.com/docs/pkce
+
 ## Learn more 
 
 Homepage: https://hivesigner.com
