@@ -135,6 +135,13 @@ message, so the challenge cannot be changed after the user approved.
 - `pkce_public: true` in the app profile is for an app that has a server (with
   the secret) and a native app (without it) on one account. Only the boolean
   `true` counts. A secret that is sent must be the right one.
+- `allowed_ips` applies to every exchange, so an app account with an IP
+  allowlist cannot be used by a native app.
+- `pkce_public` opens the exchange to whoever holds a code and its verifier.
+  For an https or loopback callback that adds nothing new (the token flow
+  already sends a token there), but anyone can claim a custom scheme on a
+  device: register only callbacks you control, preferably verified App Links
+  or Universal Links.
 - Every failure answers `401 invalid_grant`.
 - A code with a challenge is accepted only here, never as a token at `/api/me`.
 - Used codes are remembered in memory, which is enough for one replica. Running

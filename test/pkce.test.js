@@ -188,6 +188,32 @@ test('a PKCE code older than ten minutes is refused', async () => {
   }));
 });
 
+test('a timestamp in milliseconds is refused and says so', async () => {
+  const verifier = newVerifier();
+  const r = await exchange({
+    code: pkceCode('nativeapp', verifier, {}, { timestamp: Date.now() }), code_verifier: verifier,
+  });
+  refusedAsInvalidGrant(r);
+  assert.match(r.json.error_description, /seconds/);
+});
+
+test('a timestamp that is not a whole number is refused as not valid', async () => {
+  const verifier = newVerifier();
+  const r = await exchange({
+    code: pkceCode('nativeapp', verifier, {}, { timestamp: String(Math.floor(Date.now() / 1000)) }),
+    code_verifier: verifier,
+  });
+  refusedAsInvalidGrant(r);
+  assert.match(r.json.error_description, /timestamp/);
+});
+
+test('a used code is remembered for longer than it can be exchanged', async () => {
+  const { USED_CODE_TTL, PKCE_CODE_LIFETIME } = await import('../helpers/middleware.js');
+  // Dated up to 60 s ahead and floored to the second: valid until 661 s after
+  // the exchange at most. The entry has to outlive that.
+  assert.ok(USED_CODE_TTL >= PKCE_CODE_LIFETIME + 60 + 2);
+});
+
 test('a PKCE code dated in the future is refused', async () => {
   const verifier = newVerifier();
   const timestamp = Math.floor(Date.now() / 1000) + 10 * 60;

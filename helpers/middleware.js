@@ -37,8 +37,12 @@ const VERIFIER_RE = /^[A-Za-z0-9._~-]{43,128}$/;
  * restart forgets the list, which still leaves the verifier and the age limit
  * standing. Running more replicas needs a shared store here.
  */
+// A code dated PKCE_CLOCK_SKEW ahead stays valid that much longer, plus a
+// second of flooring; the margin keeps the entry alive past its last valid
+// moment so it can never be exchanged a second time.
+export const USED_CODE_TTL = PKCE_CODE_LIFETIME + PKCE_CLOCK_SKEW + 5;
 const exchangedCodes = new NodeCache({
-  stdTTL: PKCE_CODE_LIFETIME + PKCE_CLOCK_SKEW, checkperiod: 120, useClones: false,
+  stdTTL: USED_CODE_TTL, checkperiod: 120, useClones: false,
 });
 
 const param = (req, name) => (req.body && req.body[name]) || (req.query && req.query[name]);
@@ -49,11 +53,12 @@ const pkceProblem = (pkce, verifier) => {
     return 'The code challenge is not valid, only S256 is supported';
   }
   const now = Math.floor(Date.now() / 1000);
-  if (typeof pkce.timestamp !== 'number'
-    || now - pkce.timestamp > PKCE_CODE_LIFETIME
-    || pkce.timestamp - now > PKCE_CLOCK_SKEW) {
-    return 'The code has expired';
+  if (!Number.isInteger(pkce.timestamp)) return 'The code timestamp is not valid';
+  if (pkce.timestamp - now > PKCE_CLOCK_SKEW) {
+    // The usual cause is a signer that wrote milliseconds.
+    return 'The code is dated in the future (the timestamp is in seconds)';
   }
+  if (now - pkce.timestamp > PKCE_CODE_LIFETIME) return 'The code has expired';
   if (typeof verifier !== 'string' || !VERIFIER_RE.test(verifier)) {
     return 'The code verifier is missing or not valid';
   }
