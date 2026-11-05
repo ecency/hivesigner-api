@@ -35,6 +35,11 @@ const ACCOUNTS = {
   nativeapp: appAccount('nativeapp', {}),
   // A server-side app: it has a secret and PKCE does not replace it.
   webapp: appAccount('webapp', { secret: SECRET_HASH }),
+  // A server-side app whose owner also lets its native app in with PKCE
+  // alone (Ecency: the website has the secret, Waves cannot hold it).
+  sharedapp: appAccount('sharedapp', { secret: SECRET_HASH, pkce_public: true }),
+  // Only `true` opts in: a string someone typed does not.
+  looseflag: appAccount('looseflag', { secret: SECRET_HASH, pkce_public: 'true' }),
 };
 mock.module('../helpers/client.js', {
   namedExports: { getAccount: async (name) => (ACCOUNTS[name] ? [ACCOUNTS[name]] : []) },
@@ -233,6 +238,39 @@ test('an app with a client secret exchanges a PKCE code with the secret and the 
   });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.ok(r.json.refresh_token);
+});
+
+test('an app with a secret that opted in with pkce_public exchanges with the verifier alone', async () => {
+  const verifier = newVerifier();
+  const r = await exchange({ code: pkceCode('sharedapp', verifier), code_verifier: verifier });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.refresh_token, undefined);
+});
+
+test('pkce_public still needs the verifier, and a wrong secret is still refused', async () => {
+  refusedAsInvalidGrant(await exchange({ code: pkceCode('sharedapp', newVerifier()), client_secret: SECRET }));
+  const verifier = newVerifier();
+  refusedAsInvalidGrant(await exchange({
+    code: pkceCode('sharedapp', verifier), code_verifier: verifier, client_secret: 'wrong',
+  }));
+});
+
+test('pkce_public with the secret as well still gets a refresh token', async () => {
+  const verifier = newVerifier();
+  const r = await exchange({
+    code: pkceCode('sharedapp', verifier), code_verifier: verifier, client_secret: SECRET,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.ok(r.json.refresh_token);
+});
+
+test('pkce_public does not open codes without a challenge', async () => {
+  refusedAsInvalidGrant(await exchange({ code: signCode({ type: 'code', app: 'sharedapp' }) }));
+});
+
+test('pkce_public must be the boolean true', async () => {
+  const verifier = newVerifier();
+  refusedAsInvalidGrant(await exchange({ code: pkceCode('looseflag', verifier), code_verifier: verifier }));
 });
 
 test('the secret does not stand in for the verifier', async () => {

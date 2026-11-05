@@ -128,9 +128,13 @@ message, so the challenge cannot be changed after the user approved.
 | No challenge (every app today) | `client_secret` | no | none | yes |
 | Challenge, app has a secret | `client_secret` and `code_verifier` | yes | 10 min | yes |
 | Challenge, app has no secret (native app) | `code_verifier` | yes | 10 min | no |
+| Challenge, app has a secret and `pkce_public: true` | `code_verifier` (secret optional) | yes | 10 min | only with the secret |
 
 - `code_verifier` must be 43 to 128 characters of `A-Z a-z 0-9 - . _ ~`, and
   `BASE64URL(SHA256(code_verifier))` must equal the challenge. Only `S256`.
+- `pkce_public: true` in the app profile is for an app that has a server (with
+  the secret) and a native app (without it) on one account. Only the boolean
+  `true` counts. A secret that is sent must be the right one.
 - Every failure answers `401 invalid_grant`.
 - A code with a challenge is accepted only here, never as a token at `/api/me`.
 - Used codes are remembered in memory, which is enough for one replica. Running

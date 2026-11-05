@@ -235,10 +235,15 @@ export const authenticate = (roles) => async (req, res, next) => {
       : null;
     // An app with a secret is a server-side app and keeps proving it with the
     // secret, PKCE or not: otherwise anyone who starts a flow with their own
-    // challenge and gets hold of the resulting code could skip the secret. An
-    // app with NO secret is a public client (a native or browser app that could
-    // not keep one), and the verifier of a PKCE code is its only proof.
-    const publicClient = !!app && !app.secret && !!req.pkce;
+    // challenge and gets hold of the resulting code could skip the secret.
+    // Two exceptions, both for a PKCE code sent WITHOUT a secret: an app with no
+    // secret at all (a native or browser app that could not keep one), and an
+    // app whose owner opted in with `pkce_public: true` because it also has a
+    // native app (Ecency's website holds the secret, Waves cannot). A secret
+    // that is sent must always be the right one.
+    const secretOk = !!app && !!app.secret && !!secretHash && secretHash === app.secret;
+    const publicClient = !!app && !!req.pkce && !secretHash
+      && (!app.secret || app.pkce_public === true);
 
     // Every check passed. A PKCE code is used up here and nowhere earlier, so a
     // wrong verifier from whoever intercepted it does not burn the real app's
@@ -260,7 +265,7 @@ export const authenticate = (roles) => async (req, res, next) => {
       next();
     };
 
-    if (!app || (!publicClient && (!app.secret || !secretHash || secretHash !== app.secret))) {
+    if (!app || (!publicClient && !secretOk)) {
       res.status(401).json({
         error: 'invalid_grant',
         error_description: 'The code or secret is not valid',
