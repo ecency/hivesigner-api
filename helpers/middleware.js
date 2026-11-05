@@ -1,4 +1,5 @@
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
+import NodeCache from 'node-cache';
 import pkg from 'lodash';
 import { verify } from './token.js';
 import { getAppProfile, b64uToB64 } from './utils.js';
@@ -7,6 +8,62 @@ import cjson from '../config.json' with { type: 'json' };
 
 const { intersection, has } = pkg;
 const { authorized_operations } = cjson;
+
+/**
+ * PKCE (RFC 7636) on the code flow.
+ *
+ * The authorize page puts `code_challenge` and `code_challenge_method` INSIDE
+ * the signed message of a code, so nobody can add, swap or drop the challenge
+ * after the user approved without breaking the user's signature. Exchanging
+ * such a code needs the `code_verifier` whose SHA-256 is that challenge, which
+ * only the app that started the flow knows. That is what makes a code that
+ * travels through a custom scheme (`myapp://cb?code=...`) safe: another app
+ * that receives the link cannot exchange it.
+ *
+ * Codes WITHOUT a challenge are untouched: no age limit, reusable, secret
+ * required, exactly as before.
+ */
+/** How long a PKCE code can be exchanged after it was signed, in seconds. */
+export const PKCE_CODE_LIFETIME = 10 * 60;
+/** How far ahead of this server's clock a code may be dated (device clocks drift). */
+const PKCE_CLOCK_SKEW = 60;
+const CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
+const VERIFIER_RE = /^[A-Za-z0-9._~-]{43,128}$/;
+
+/**
+ * PKCE codes that were already exchanged, so each is exchanged once. Kept in
+ * memory: the API runs as one replica (docker-compose.yml), and a code expires
+ * after PKCE_CODE_LIFETIME anyway, so an entry only has to outlive that. A
+ * restart forgets the list, which still leaves the verifier and the age limit
+ * standing. Running more replicas needs a shared store here.
+ */
+const exchangedCodes = new NodeCache({
+  stdTTL: PKCE_CODE_LIFETIME + PKCE_CLOCK_SKEW, checkperiod: 120, useClones: false,
+});
+
+const param = (req, name) => (req.body && req.body[name]) || (req.query && req.query[name]);
+
+/** Why a PKCE code cannot be exchanged with this verifier, or null when it can. */
+const pkceProblem = (pkce, verifier) => {
+  if (pkce.method !== 'S256' || typeof pkce.challenge !== 'string' || !CHALLENGE_RE.test(pkce.challenge)) {
+    return 'The code challenge is not valid, only S256 is supported';
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof pkce.timestamp !== 'number'
+    || now - pkce.timestamp > PKCE_CODE_LIFETIME
+    || pkce.timestamp - now > PKCE_CLOCK_SKEW) {
+    return 'The code has expired';
+  }
+  if (typeof verifier !== 'string' || !VERIFIER_RE.test(verifier)) {
+    return 'The code verifier is missing or not valid';
+  }
+  const expected = Buffer.from(pkce.challenge);
+  const actual = Buffer.from(createHash('sha256').update(verifier).digest('base64url'));
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    return 'The code verifier does not match the code challenge';
+  }
+  return null;
+};
 
 /**
  * Check if user allow app proxy account to post on his behalf
@@ -104,6 +161,16 @@ export const strategy = (req, res, next) => {
             req.proxy = signedMessage.app;
             req.scope = scope;
             req.type = 'signature';
+            if (role === 'code' && Object.prototype.hasOwnProperty.call(signedMessage, 'code_challenge')) {
+              req.pkce = {
+                challenge: signedMessage.code_challenge,
+                method: signedMessage.code_challenge_method,
+                timestamp: tokenObj.timestamp,
+                // What the user signed, so a re-encoded copy of the same code
+                // counts as the same code for the single-use check.
+                id: createHash('sha256').update(message).digest('hex'),
+              };
+            }
             if (memo) {
               req.memo = memo;
             }
@@ -132,6 +199,18 @@ export const authenticate = (roles) => async (req, res, next) => {
       error: 'invalid_grant',
       error_description: 'The token has invalid role',
     });
+  } else if (req.pkce && !(Array.isArray(roles) && roles.includes('code'))) {
+    // A PKCE code is only ever exchanged. Everywhere else (/me, /decode) a
+    // code is accepted with the client secret, and a PKCE app has none.
+    res.status(401).json({
+      error: 'invalid_grant',
+      error_description: 'The code can only be exchanged at /api/oauth2/token',
+    });
+  } else if (req.pkce && pkceProblem(req.pkce, param(req, 'code_verifier'))) {
+    res.status(401).json({
+      error: 'invalid_grant',
+      error_description: pkceProblem(req.pkce, param(req, 'code_verifier')),
+    });
   } else if (['code', 'refresh'].includes(req.role)) {
     // Only the app the code was issued to may exchange it, proven by its
     // secret. Every path where that cannot be checked refuses.
@@ -150,12 +229,38 @@ export const authenticate = (roles) => async (req, res, next) => {
       }
     }
 
-    const secret = (req.query && req.query.client_secret) || (req.body && req.body.client_secret);
+    const secret = param(req, 'client_secret');
     const secretHash = typeof secret === 'string' && secret
       ? createHash('sha256').update(secret).digest('hex')
       : null;
+    // An app with a secret is a server-side app and keeps proving it with the
+    // secret, PKCE or not: otherwise anyone who starts a flow with their own
+    // challenge and gets hold of the resulting code could skip the secret. An
+    // app with NO secret is a public client (a native or browser app that could
+    // not keep one), and the verifier of a PKCE code is its only proof.
+    const publicClient = !!app && !app.secret && !!req.pkce;
 
-    if (!app || !app.secret || !secretHash || secretHash !== app.secret) {
+    // Every check passed. A PKCE code is used up here and nowhere earlier, so a
+    // wrong verifier from whoever intercepted it does not burn the real app's
+    // code. No await between the lookup and the set: concurrent exchanges of
+    // one code cannot both get through.
+    const grant = () => {
+      if (req.pkce) {
+        if (exchangedCodes.has(req.pkce.id)) {
+          res.status(401).json({
+            error: 'invalid_grant',
+            error_description: 'The code was already used',
+          });
+          return;
+        }
+        exchangedCodes.set(req.pkce.id, true);
+      }
+      // A public client gets no refresh token: refreshing needs the secret.
+      req.publicClient = publicClient; // eslint-disable-line no-param-reassign
+      next();
+    };
+
+    if (!app || (!publicClient && (!app.secret || !secretHash || secretHash !== app.secret))) {
       res.status(401).json({
         error: 'invalid_grant',
         error_description: 'The code or secret is not valid',
@@ -163,7 +268,7 @@ export const authenticate = (roles) => async (req, res, next) => {
     } else if (app.allowed_ips && app.allowed_ips.length > 0) {
       const reqIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
       if (intersection(app.allowed_ips, reqIp.replace(' ', '').split(',')).length > 0) {
-        next();
+        grant();
       } else {
         res.status(401).json({
           error: 'unauthorized_access',
@@ -171,7 +276,7 @@ export const authenticate = (roles) => async (req, res, next) => {
         });
       }
     } else {
-      next();
+      grant();
     }
   } else {
     next();

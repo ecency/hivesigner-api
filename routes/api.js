@@ -206,7 +206,9 @@ router.all('/oauth2/token', authenticate(['code', 'refresh']), async (req, res) 
   console.log(new Date().toISOString(), `Issue tokens for user @${req.user} for @${req.proxy} app.`);
   res.json({
     access_token: issue(req.proxy, req.user, 'posting'),
-    refresh_token: issue(req.proxy, req.user, 'refresh'),
+    // A public client (PKCE, no secret) could never use a refresh token: the
+    // refresh exchange needs the secret. It signs the user in again instead.
+    ...(req.publicClient ? {} : { refresh_token: issue(req.proxy, req.user, 'refresh') }),
     expires_in: token_expiration,
     username: req.user,
   });

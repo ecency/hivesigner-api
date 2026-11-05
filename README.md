@@ -117,6 +117,27 @@ request. Filling a day costs the attacker accounts and buys them at most one
 build interval of delay for a newcomer, and nothing at all against a known
 app.
 
+## PKCE on the code exchange: `POST /api/oauth2/token`
+
+A code can carry a PKCE challenge (RFC 7636). The authorize page puts
+`code_challenge` and `code_challenge_method: "S256"` inside the code's signed
+message, so the challenge cannot be changed after the user approved.
+
+| Code | Needs | Single use | Age limit | Refresh token |
+| --- | --- | --- | --- | --- |
+| No challenge (every app today) | `client_secret` | no | none | yes |
+| Challenge, app has a secret | `client_secret` and `code_verifier` | yes | 10 min | yes |
+| Challenge, app has no secret (native app) | `code_verifier` | yes | 10 min | no |
+
+- `code_verifier` must be 43 to 128 characters of `A-Z a-z 0-9 - . _ ~`, and
+  `BASE64URL(SHA256(code_verifier))` must equal the challenge. Only `S256`.
+- Every failure answers `401 invalid_grant`.
+- A code with a challenge is accepted only here, never as a token at `/api/me`.
+- Used codes are remembered in memory, which is enough for one replica. Running
+  more replicas needs a shared store (see `helpers/middleware.js`).
+
+Full guide: https://hivesigner.com/docs/pkce
+
 ## Learn more 
 
 Homepage: https://hivesigner.com
