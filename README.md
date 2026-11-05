@@ -126,9 +126,9 @@ message, so the challenge cannot be changed after the user approved.
 | Code | Needs | Single use | Age limit | Refresh token |
 | --- | --- | --- | --- | --- |
 | No challenge (every app today) | `client_secret` | no | none | yes |
-| Challenge, app has a secret | `client_secret` and `code_verifier` | yes | 10 min | yes |
-| Challenge, app has no secret (native app) | `code_verifier` | yes | 10 min | no |
-| Challenge, app has a secret and `pkce_public: true` | `code_verifier` (secret optional) | yes | 10 min | only with the secret |
+| Challenge, app has a secret | `client_secret` and `code_verifier` | yes | 10 min (+5 for clocks) | yes |
+| Challenge, app has no secret (native app) | `code_verifier` | yes | 10 min (+5 for clocks) | no |
+| Challenge, app has a secret and `pkce_public: true` | `code_verifier` (secret optional) | yes | 10 min (+5 for clocks) | only with the secret |
 
 - `code_verifier` must be 43 to 128 characters of `A-Z a-z 0-9 - . _ ~`, and
   `BASE64URL(SHA256(code_verifier))` must equal the challenge. Only `S256`.

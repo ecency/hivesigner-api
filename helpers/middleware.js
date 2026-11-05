@@ -25,22 +25,27 @@ const { authorized_operations } = cjson;
  */
 /** How long a PKCE code can be exchanged after it was signed, in seconds. */
 export const PKCE_CODE_LIFETIME = 10 * 60;
-/** How far ahead of this server's clock a code may be dated (device clocks drift). */
-const PKCE_CLOCK_SKEW = 60;
+/**
+ * How far the signer's clock may differ from this server's, either way. The
+ * timestamp comes from the user's browser or phone, so a clock a few minutes
+ * fast or slow must not fail the sign-in: a code may be dated this much ahead,
+ * and is accepted this much past its lifetime.
+ */
+const PKCE_CLOCK_SKEW = 5 * 60;
 const CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
 const VERIFIER_RE = /^[A-Za-z0-9._~-]{43,128}$/;
 
 /**
  * PKCE codes that were already exchanged, so each is exchanged once. Kept in
  * memory: the API runs as one replica (docker-compose.yml), and a code expires
- * after PKCE_CODE_LIFETIME anyway, so an entry only has to outlive that. A
+ * on its own (USED_CODE_TTL), so an entry only has to outlive that. A
  * restart forgets the list, which still leaves the verifier and the age limit
  * standing. Running more replicas needs a shared store here.
  */
-// A code dated PKCE_CLOCK_SKEW ahead stays valid that much longer, plus a
-// second of flooring; the margin keeps the entry alive past its last valid
-// moment so it can never be exchanged a second time.
-export const USED_CODE_TTL = PKCE_CODE_LIFETIME + PKCE_CLOCK_SKEW + 5;
+// A code dated PKCE_CLOCK_SKEW ahead is accepted until LIFETIME + SKEW past
+// its date, plus a second of flooring; the margin keeps the entry alive past
+// its last valid moment so it can never be exchanged a second time.
+export const USED_CODE_TTL = PKCE_CODE_LIFETIME + 2 * PKCE_CLOCK_SKEW + 5;
 const exchangedCodes = new NodeCache({
   stdTTL: USED_CODE_TTL, checkperiod: 120, useClones: false,
 });
@@ -58,7 +63,7 @@ const pkceProblem = (pkce, verifier) => {
     // The usual cause is a signer that wrote milliseconds.
     return 'The code is dated in the future (the timestamp is in seconds)';
   }
-  if (now - pkce.timestamp > PKCE_CODE_LIFETIME) return 'The code has expired';
+  if (now - pkce.timestamp > PKCE_CODE_LIFETIME + PKCE_CLOCK_SKEW) return 'The code has expired';
   if (typeof verifier !== 'string' || !VERIFIER_RE.test(verifier)) {
     return 'The code verifier is missing or not valid';
   }

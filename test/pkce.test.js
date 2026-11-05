@@ -180,9 +180,20 @@ test('two exchanges of one code at the same time: exactly one gets tokens', asyn
   assert.deepEqual(results.map((r) => r.status).sort(), [200, 401, 401]);
 });
 
-test('a PKCE code older than ten minutes is refused', async () => {
+test('a code from a browser whose clock is a few minutes off still works', async () => {
+  for (const offset of [-4 * 60, 4 * 60, -14 * 60]) {
+    const verifier = newVerifier();
+    const timestamp = Math.floor(Date.now() / 1000) + offset;
+    const r = await exchange({
+      code: pkceCode('nativeapp', verifier, {}, { timestamp }), code_verifier: verifier,
+    });
+    assert.equal(r.status, 200, `${offset}: ${JSON.stringify(r.json)}`);
+  }
+});
+
+test('a PKCE code older than its lifetime plus the clock allowance is refused', async () => {
   const verifier = newVerifier();
-  const timestamp = Math.floor(Date.now() / 1000) - 11 * 60;
+  const timestamp = Math.floor(Date.now() / 1000) - 16 * 60;
   refusedAsInvalidGrant(await exchange({
     code: pkceCode('nativeapp', verifier, {}, { timestamp }), code_verifier: verifier,
   }));
@@ -209,9 +220,9 @@ test('a timestamp that is not a whole number is refused as not valid', async () 
 
 test('a used code is remembered for longer than it can be exchanged', async () => {
   const { USED_CODE_TTL, PKCE_CODE_LIFETIME } = await import('../helpers/middleware.js');
-  // Dated up to 60 s ahead and floored to the second: valid until 661 s after
-  // the exchange at most. The entry has to outlive that.
-  assert.ok(USED_CODE_TTL >= PKCE_CODE_LIFETIME + 60 + 2);
+  // Dated up to 5 min ahead, accepted up to lifetime + 5 min after its date,
+  // floored to the second: the entry has to outlive all of that.
+  assert.ok(USED_CODE_TTL >= PKCE_CODE_LIFETIME + 2 * 300 + 2);
 });
 
 test('a PKCE code dated in the future is refused', async () => {
