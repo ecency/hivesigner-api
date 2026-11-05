@@ -171,6 +171,9 @@ export const strategy = (req, res, next) => {
             req.proxy = signedMessage.app;
             req.scope = scope;
             req.type = 'signature';
+            // A code the user approved for sign-in only says so, and its
+            // exchange then issues a login token, never a posting one.
+            if (role === 'code' && signedMessage.scope === 'login') req.codeScope = 'login';
             if (role === 'code' && Object.prototype.hasOwnProperty.call(signedMessage, 'code_challenge')) {
               req.pkce = {
                 challenge: signedMessage.code_challenge,
@@ -255,8 +258,13 @@ export const authenticate = (roles) => async (req, res, next) => {
     // native app (Ecency's website holds the secret, Waves cannot). A secret
     // that is sent must always be the right one.
     const secretOk = !!app && !!app.secret && !!secretHash && secretHash === app.secret;
-    const publicClient = !!app && !!req.pkce && !secretHash
-      && (!app.secret || app.pkce_public === true);
+    // Anything sent as a secret counts as sent, a number or an object too, and
+    // then has to be right. An app with an IP allowlist is a server: its
+    // exchanges always need the secret, because the address check reads a
+    // header the caller can set.
+    const publicClient = !!app && !!req.pkce && !secret
+      && (!app.secret || app.pkce_public === true)
+      && !(app.allowed_ips && app.allowed_ips.length > 0);
 
     // Every check passed. A PKCE code is used up here and nowhere earlier, so a
     // wrong verifier from whoever intercepted it does not burn the real app's

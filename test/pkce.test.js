@@ -40,6 +40,8 @@ const ACCOUNTS = {
   sharedapp: appAccount('sharedapp', { secret: SECRET_HASH, pkce_public: true }),
   // Only `true` opts in: a string someone typed does not.
   looseflag: appAccount('looseflag', { secret: SECRET_HASH, pkce_public: 'true' }),
+  // A server app that limits exchanges to its own addresses.
+  fencedapp: appAccount('fencedapp', { allowed_ips: ['198.51.100.7'] }),
 };
 mock.module('../helpers/client.js', {
   namedExports: { getAccount: async (name) => (ACCOUNTS[name] ? [ACCOUNTS[name]] : []) },
@@ -104,10 +106,10 @@ function pkceCode(app, verifier, extra = {}, opts) {
   }, opts);
 }
 
-async function exchange(body) {
+async function exchange(body, headers = {}) {
   const res = await fetch(`${base}/oauth2/token`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(3000),
   });
@@ -327,6 +329,49 @@ test('a PKCE code is not accepted as a token anywhere else, even with its verifi
     headers: { authorization: pkceCode('nativeapp', verifier) },
   });
   assert.equal(res.status, 401);
+});
+
+test('a login-scope code gets a login token, never a posting one, and no refresh token', async () => {
+  const verifier = newVerifier();
+  const r = await exchange({
+    code: pkceCode('nativeapp', verifier, { scope: 'login' }), code_verifier: verifier,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.refresh_token, undefined);
+  const token = JSON.parse(b64uDec(r.json.access_token));
+  assert.equal(token.signed_message.type, 'login');
+  // With the secret too: still login only.
+  const s = await exchange({ code: signCode({ type: 'code', app: 'webapp', scope: 'login' }), client_secret: SECRET });
+  assert.equal(s.status, 200, JSON.stringify(s.json));
+  assert.equal(JSON.parse(b64uDec(s.json.access_token)).signed_message.type, 'login');
+  assert.equal(s.json.refresh_token, undefined);
+});
+
+test('a login token from a code has login scope only', async () => {
+  const verifier = newVerifier();
+  const { json } = await exchange({
+    code: pkceCode('nativeapp', verifier, { scope: 'login' }), code_verifier: verifier,
+  });
+  const res = await fetch(`${base}/me`, { headers: { authorization: json.access_token } });
+  assert.deepEqual((await res.json()).scope, ['login']);
+});
+
+for (const bad of [123, { a: 1 }, ['x'], true]) {
+  test(`a client_secret of ${JSON.stringify(bad)} sent with a public PKCE exchange is refused`, async () => {
+    const verifier = newVerifier();
+    refusedAsInvalidGrant(await exchange({
+      code: pkceCode('nativeapp', verifier), code_verifier: verifier, client_secret: bad,
+    }));
+  });
+}
+
+test('an app with an IP allowlist gets no secret-less exchange, whatever X-Forwarded-For says', async () => {
+  const verifier = newVerifier();
+  const r = await exchange(
+    { code: pkceCode('fencedapp', verifier), code_verifier: verifier },
+    { 'x-forwarded-for': '198.51.100.7' },
+  );
+  assert.equal(r.status, 401);
 });
 
 // Unchanged behaviour for every app that exists today.

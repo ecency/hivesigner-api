@@ -135,8 +135,14 @@ message, so the challenge cannot be changed after the user approved.
 - `pkce_public: true` in the app profile is for an app that has a server (with
   the secret) and a native app (without it) on one account. Only the boolean
   `true` counts. A secret that is sent must be the right one.
-- `allowed_ips` applies to every exchange, so an app account with an IP
-  allowlist cannot be used by a native app.
+- An app account with an IP allowlist (`allowed_ips`) always needs the
+  secret: the address check reads a header the caller can set, so it cannot be
+  the only proof. Such an account cannot serve a native app.
+- Used codes are kept in memory. A restart forgets them, so a code exchanged
+  just before a restart could be exchanged once more until it expires, by
+  whoever also holds its verifier.
+- A code signed with `scope: "login"` (the user approved sign-in only) is
+  exchanged for a login token and no refresh token, with or without PKCE.
 - `pkce_public` opens the exchange to whoever holds a code and its verifier.
   For an https or loopback callback that adds nothing new (the token flow
   already sends a token there), but anyone can claim a custom scheme on a
@@ -145,8 +151,8 @@ message, so the challenge cannot be changed after the user approved.
 - Every PKCE failure answers `401 invalid_grant` (an `allowed_ips` mismatch
   keeps its `401 unauthorized_access`).
 - A code with a challenge is accepted only here, never as a token at `/api/me`.
-- Used codes are remembered in memory, which is enough for one replica. Running
-  more replicas needs a shared store (see `helpers/middleware.js`).
+- Running more replicas needs a shared store for used codes (see
+  `helpers/middleware.js`).
 
 Full guide: https://hivesigner.com/docs/pkce
 

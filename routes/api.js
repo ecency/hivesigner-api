@@ -204,11 +204,14 @@ router.get('/apps', (req, res) => {
 /** Request app access token */
 router.all('/oauth2/token', authenticate(['code', 'refresh']), async (req, res) => {
   console.log(new Date().toISOString(), `Issue tokens for user @${req.user} for @${req.proxy} app.`);
+  // A code approved for sign-in only gives a login token. No refresh token
+  // either: a refresh always issues posting access.
+  const loginOnly = req.role === 'code' && req.codeScope === 'login';
   res.json({
-    access_token: issue(req.proxy, req.user, 'posting'),
+    access_token: issue(req.proxy, req.user, loginOnly ? 'login' : 'posting'),
     // A public client (PKCE, no secret) could never use a refresh token: the
     // refresh exchange needs the secret. It signs the user in again instead.
-    ...(req.publicClient ? {} : { refresh_token: issue(req.proxy, req.user, 'refresh') }),
+    ...(req.publicClient || loginOnly ? {} : { refresh_token: issue(req.proxy, req.user, 'refresh') }),
     expires_in: token_expiration,
     username: req.user,
   });
