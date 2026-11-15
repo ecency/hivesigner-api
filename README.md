@@ -2,6 +2,22 @@
 
 Hivesigner API module handles access token creation/verification, signing, broadcasting transactions, oauth2 for dapps.
 
+## Configuration
+
+| Variable | Purpose |
+|---|---|
+| `BROADCASTER_USERNAME` | The account apps grant posting authority to. |
+| `BROADCASTER_POSTING_WIF_FILE` | Path to a file holding that account's posting key. Defaults to `/run/secrets/broadcaster_posting_wif`, where production mounts it as a swarm secret. The service will not start without a readable, valid key. |
+| `BROADCAST_NETWORK` | `mainnet` for hivesigner.com, otherwise testnet. |
+| `API_PORT` | Listening port, default 3000. |
+
+The key is deliberately not an environment variable: env vars are shown by
+`docker service inspect` and `docker inspect`, while a secret file is mounted
+into the task only. The deploy workflow creates the swarm secret from the
+repository secret `BROADCASTER_POSTING_WIF`. Secrets are immutable, so each key
+value gets its own secret name (a hash suffix); changing the repository secret
+and redeploying creates a new one and removes the old.
+
 ## The app directory: `GET /api/apps`
 
 Public and unauthenticated. Which apps use Hivesigner, ranked by how many people

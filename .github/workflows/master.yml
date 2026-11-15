@@ -68,7 +68,26 @@ jobs:
           export API_PORT=$API_PORT
           export BROADCAST_NETWORK=$BROADCAST_NETWORK
           export BROADCASTER_USERNAME=$BROADCASTER_USERNAME
-          export BROADCASTER_POSTING_WIF=$BROADCASTER_POSTING_WIF
+          # The posting key reaches the service as a swarm secret, never as an
+          # env var (those are printed by `docker service inspect`). Secrets are
+          # immutable, so the name carries a hash of the value: an unchanged key
+          # reuses its secret, a rotated one gets a new one. The hash is of a
+          # private key, so it reveals nothing usable.
+          BROADCASTER_POSTING_WIF_SECRET="broadcaster_posting_wif_$(printf '%s' "$BROADCASTER_POSTING_WIF" | sha256sum | cut -c1-12)"
+          export BROADCASTER_POSTING_WIF_SECRET
+          if ! docker secret inspect "$BROADCASTER_POSTING_WIF_SECRET" >/dev/null 2>&1; then
+            printf '%s' "$BROADCASTER_POSTING_WIF" | docker secret create "$BROADCASTER_POSTING_WIF_SECRET" - >/dev/null
+          fi
+          unset BROADCASTER_POSTING_WIF
+          # Superseded key secrets, once the service runs on the current one.
+          # A secret still referenced by a service cannot be removed, so this
+          # never touches the one in use.
+          prune_old_key_secrets() {
+            docker secret ls --format '{{.Name}}' \
+              | grep '^broadcaster_posting_wif_' \
+              | grep -vx "$BROADCASTER_POSTING_WIF_SECRET" \
+              | xargs -r docker secret rm >/dev/null 2>&1 || true
+          }
           # One-time: this host ran the API under pm2 before the move to swarm.
           # Without this both the old process and the swarm task bind $API_PORT
           # on the first deploy and one of them loses. Harmless once pm2 has no
@@ -158,6 +177,7 @@ jobs:
               case "$?" in
                 0)
                   echo "deploy ok (update state: $state)"
+                  prune_old_key_secrets
                   docker service ps hivesigner-api_api --filter desired-state=running
                   exit 0 ;;
                 1)
@@ -171,6 +191,7 @@ jobs:
                   # signal available in that case.
                   if [ "$state" = "completed" ]; then
                     echo "deploy ok (update completed; task not on this node)"
+                    prune_old_key_secrets
                     exit 0
                   fi ;;
               esac
