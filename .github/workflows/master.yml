@@ -116,33 +116,38 @@ jobs:
           # itself. It pulls the layers before the swarm update starts, so the
           # start-first window is shorter than if the new task pulled them.
           docker pull ecency/hivesigner-api:latest
+          # What the rollout check below needs from before the deploy: a hash of
+          # everything swarm replaces tasks for (the task template and the
+          # endpoint; hashed so no value is ever printed), and the tasks that
+          # already exist.
+          rollout_spec() {
+            docker service inspect hivesigner-api_api \
+              --format '{{json .Spec.TaskTemplate}}{{json .Spec.EndpointSpec}}' 2>/dev/null \
+              | sha256sum
+          }
+          SPEC_BEFORE=$(rollout_spec)
+          TASKS_BEFORE=" $(docker service ps hivesigner-api_api --no-trunc -q 2>/dev/null | tr '\n' ' ') "
           docker stack deploy -c docker-compose.yml hivesigner-api \
             || { echo "stack deploy failed"; exit 1; }
+          if [ "$(rollout_spec)" = "$SPEC_BEFORE" ]; then ROLLOUT=no; else ROLLOUT=yes; fi
           # `stack deploy` returns as soon as the update is ACCEPTED, so without
           # a wait the workflow reports success over a task that never starts.
           #
-          # Is a task running THE IMAGE THIS DEPLOY ASKED FOR?
+          # Is a task running THIS DEPLOY's settings?
           #
           # `--filter desired-state=running` alone is not an answer: under
           # start-first the OUTGOING task is still desired-running, so both a
           # `completed` left over from the previous deploy and a reset `none`
           # could be answered by the task being replaced.
           #
-          # Compared against the SERVICE SPEC's image rather than the digest the
-          # build job pushed. Those two are not the same string - swarm resolves
-          # the tag itself and records its own digest, which differs from what
-          # buildx reports pushing - so matching the pushed digest would fail
-          # EVERY deploy, which is a worse failure than the one being fixed.
-          # `stack deploy` writes the newly resolved image into the spec, so the
-          # spec names the incoming image while the outgoing task still carries
-          # the previous one. Verified: mid-rollout the old task is Running on
-          # the old image and this correctly reports not-yet.
-          #
-          # The image alone does not identify the incoming task: a deploy that
-          # only rotates the key keeps the same image, and under start-first the
-          # outgoing task would match it while the new one is still starting.
-          # So the task must also carry THIS deploy's key secret, read from the
-          # task's own spec.
+          # Matching a field of the task (its image, its key secret) is not an
+          # answer either: a deploy can change something else and keep both,
+          # and then the outgoing task matches while its replacement is still
+          # starting. What does identify it: swarm builds every new task,
+          # restarts included, from the service's CURRENT spec. So when this
+          # deploy changed what swarm rolls out, the answer is a running task
+          # that did not exist before the deploy. When it changed nothing, no
+          # task is replaced and the running one is already on these settings.
           #
           # Publishes the matching task's id, because the health check below has
           # to read THAT task's container rather than whichever one docker lists
@@ -150,19 +155,15 @@ jobs:
           TASK_ID=
           running() {
             TASK_ID=
-            want=$(docker service inspect hivesigner-api_api \
-              --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}' 2>/dev/null) || return 1
-            [ -n "$want" ] || return 1
             for id in $(docker service ps hivesigner-api_api --no-trunc \
               --filter desired-state=running \
-              --format '{{.ID}} {{.CurrentState}} {{.Image}}' 2>/dev/null \
-              | awk -v want="$want" '$2 == "Running" && index($0, want) { print $1 }'); do
-              if docker inspect --type task "$id" \
-                --format '{{range .Spec.ContainerSpec.Secrets}}{{println .SecretName}}{{end}}' 2>/dev/null \
-                | grep -qxF "$BROADCASTER_POSTING_WIF_SECRET"; then
-                TASK_ID=$id
-                return 0
+              --format '{{.ID}} {{.CurrentState}}' 2>/dev/null \
+              | awk '$2 == "Running" { print $1 }'); do
+              if [ "$ROLLOUT" = yes ]; then
+                case "$TASKS_BEFORE" in *" $id "*) continue ;; esac
               fi
+              TASK_ID=$id
+              return 0
             done
             return 1
           }
