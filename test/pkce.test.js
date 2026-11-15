@@ -356,7 +356,7 @@ test('a login token from a code has login scope only', async () => {
   assert.deepEqual((await res.json()).scope, ['login']);
 });
 
-for (const bad of [123, { a: 1 }, ['x'], true]) {
+for (const bad of [123, { a: 1 }, ['x'], true, false, 0, '', null]) {
   test(`a client_secret of ${JSON.stringify(bad)} sent with a public PKCE exchange is refused`, async () => {
     const verifier = newVerifier();
     refusedAsInvalidGrant(await exchange({
@@ -364,6 +364,17 @@ for (const bad of [123, { a: 1 }, ['x'], true]) {
     }));
   });
 }
+
+test('an empty client_secret in the query string counts as sent and is refused', async () => {
+  const verifier = newVerifier();
+  const res = await fetch(`${base}/oauth2/token?client_secret=`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code: pkceCode('nativeapp', verifier), code_verifier: verifier }),
+    signal: AbortSignal.timeout(3000),
+  });
+  refusedAsInvalidGrant({ status: res.status, json: await res.json() });
+});
 
 test('an app with an IP allowlist gets no secret-less exchange, whatever X-Forwarded-For says', async () => {
   const verifier = newVerifier();

@@ -52,6 +52,13 @@ const exchangedCodes = new NodeCache({
 
 const param = (req, name) => (req.body && req.body[name]) || (req.query && req.query[name]);
 
+// Whether the request carries the field at all, whatever its value. `param`
+// cannot answer that: it skips falsy values, so `false`, `0` or `""` would read
+// as "not sent".
+const sentParam = (req, name) => [req.body, req.query].some(
+  (src) => !!src && typeof src === 'object' && Object.prototype.hasOwnProperty.call(src, name),
+);
+
 /** Why a PKCE code cannot be exchanged with this verifier, or null when it can. */
 const pkceProblem = (pkce, verifier) => {
   if (pkce.method !== 'S256' || typeof pkce.challenge !== 'string' || !CHALLENGE_RE.test(pkce.challenge)) {
@@ -262,7 +269,7 @@ export const authenticate = (roles) => async (req, res, next) => {
     // then has to be right. An app with an IP allowlist is a server: its
     // exchanges always need the secret, because the address check reads a
     // header the caller can set.
-    const publicClient = !!app && !!req.pkce && !secret
+    const publicClient = !!app && !!req.pkce && !sentParam(req, 'client_secret')
       && (!app.secret || app.pkce_public === true)
       && !(app.allowed_ips && app.allowed_ips.length > 0);
 
