@@ -6,7 +6,7 @@ import { getAppProfile, b64uToB64 } from './utils.js';
 import { getAccount } from './client.js';
 import cjson from '../config.json' with { type: 'json' };
 
-const { intersection, has } = pkg;
+const { has } = pkg;
 const { authorized_operations } = cjson;
 
 /**
@@ -49,6 +49,15 @@ export const USED_CODE_TTL = PKCE_CODE_LIFETIME + 2 * PKCE_CLOCK_SKEW + 5;
 const exchangedCodes = new NodeCache({
   stdTTL: USED_CODE_TTL, checkperiod: 120, useClones: false,
 });
+
+// How many proxies sit in front of the app (the local nginx). Express then
+// takes req.ip from the LAST X-Forwarded-For entry, the one that proxy wrote,
+// and never from entries a caller added. Used by start.js and the tests.
+export const TRUSTED_PROXY_HOPS = 1;
+
+// The caller's address as the trusted proxy reported it, IPv4-mapped IPv6
+// (`::ffff:1.2.3.4`) written as plain IPv4 so it compares with an allowlist.
+const clientIp = (req) => (req.ip || '').replace(/^::ffff:/, '');
 
 const param = (req, name) => (req.body && req.body[name]) || (req.query && req.query[name]);
 
@@ -265,10 +274,10 @@ export const authenticate = (roles) => async (req, res, next) => {
     // native app (Ecency's website holds the secret, Waves cannot). A secret
     // that is sent must always be the right one.
     const secretOk = !!app && !!app.secret && !!secretHash && secretHash === app.secret;
-    // Anything sent as a secret counts as sent, a number or an object too, and
-    // then has to be right. An app with an IP allowlist is a server: its
-    // exchanges always need the secret, because the address check reads a
-    // header the caller can set.
+    // Anything sent as a secret counts as sent, whatever its value, and then
+    // has to be right. An app with an IP allowlist is a server: its exchanges
+    // always need the secret, because an address is a second check for a
+    // server, never the only proof.
     const publicClient = !!app && !!req.pkce && !sentParam(req, 'client_secret')
       && (!app.secret || app.pkce_public === true)
       && !(app.allowed_ips && app.allowed_ips.length > 0);
@@ -299,8 +308,8 @@ export const authenticate = (roles) => async (req, res, next) => {
         error_description: 'The code or secret is not valid',
       });
     } else if (app.allowed_ips && app.allowed_ips.length > 0) {
-      const reqIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-      if (intersection(app.allowed_ips, reqIp.replace(' ', '').split(',')).length > 0) {
+      const reqIp = clientIp(req);
+      if (app.allowed_ips.includes(reqIp)) {
         grant();
       } else {
         res.status(401).json({
