@@ -1,12 +1,13 @@
 import { createHash } from 'crypto';
 import {
-  PublicKey, PrivateKey, Signature, Memo,
+  PublicKey, Signature, Memo,
 } from '@ecency/sdk/hive';
 import { getAccount } from './client.js';
+import { broadcasterKey } from './broadcaster.js';
 import { b64uEnc } from './utils.js';
 
 export const decodeMemo = async(encodedMemo) => {
-  const privateKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
+  const privateKey = broadcasterKey();
   let rr = "";
   try {
     rr = Memo.decode(privateKey, encodedMemo);
@@ -26,8 +27,7 @@ export const issue = (app, author, type) => {
     timestamp: parseInt(new Date().getTime() / 1000, 10),
   };
   const hash = sha256(JSON.stringify(message));
-  const privateKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
-  const signature = privateKey.sign(hash).toString();
+  const signature = broadcasterKey().sign(hash).toString();
   message.signatures = [signature];
   return b64uEnc(JSON.stringify(message));
 };
@@ -36,8 +36,7 @@ export const issue = (app, author, type) => {
 export const verify = (message, username, signature, cb) => {
   const hash = sha256(message);
 
-  const broadcasterPrivKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
-  const broadcasterPubKey = broadcasterPrivKey.createPublic(process.env.BROADCASTER_NETWORK === 'mainnet' ? 'STM' : 'TST');
+  const broadcasterPubKey = broadcasterKey().createPublic();
   if (broadcasterPubKey.verify(hash, Signature.from(signature))) {
     return cb(null, true);
   }

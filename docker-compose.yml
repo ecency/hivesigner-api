@@ -7,7 +7,14 @@ services:
       - API_PORT
       - BROADCAST_NETWORK
       - BROADCASTER_USERNAME
-      - BROADCASTER_POSTING_WIF
+    # The posting key, as a file at /run/secrets/broadcaster_posting_wif. Never an
+    # env var: those are printed by `docker service inspect`. 1000 is the image's
+    # `node` user, the only reader.
+    secrets:
+      - source: broadcaster_posting_wif
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
     ports:
       - ${API_PORT}:${API_PORT}
     # The app-usage history, which IS the directory. A task's filesystem is
@@ -43,3 +50,10 @@ volumes:
   # Local to the node. There is one replica, so there is one node that matters;
   # if that ever changes this needs to become a shared volume or a datastore.
   hsapi-data:
+
+secrets:
+  # Created by the deploy workflow. Swarm secrets are immutable, so the name
+  # carries a hash of the value and the workflow passes it in.
+  broadcaster_posting_wif:
+    external: true
+    name: ${BROADCASTER_POSTING_WIF_SECRET:?set by the deploy workflow}
