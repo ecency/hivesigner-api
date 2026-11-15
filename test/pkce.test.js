@@ -1,6 +1,9 @@
 import { test, mock, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import express from 'express';
 import { PrivateKey } from '@ecency/sdk/hive';
 
@@ -8,7 +11,11 @@ import { PrivateKey } from '@ecency/sdk/hive';
 // own posting key, read by the real token strategy, exchanged at the real
 // /api/oauth2/token route. Only the chain is replaced.
 
-process.env.BROADCASTER_POSTING_WIF = PrivateKey.fromSeed('hivesigner-api-test').toString();
+// The routes read the broadcaster key file at import. A throwaway key is
+// enough: nothing here reaches the chain.
+const keyDir = mkdtempSync(join(tmpdir(), 'hsapi-key-'));
+process.env.BROADCASTER_POSTING_WIF_FILE = join(keyDir, 'broadcaster_posting_wif');
+writeFileSync(process.env.BROADCASTER_POSTING_WIF_FILE, `${PrivateKey.fromSeed('hivesigner-api-test')}\n`);
 process.env.BROADCASTER_USERNAME = 'broadcaster';
 
 const ALICE_KEY = PrivateKey.fromSeed('alice-posting');
