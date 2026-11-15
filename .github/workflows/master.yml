@@ -138,6 +138,12 @@ jobs:
           # the previous one. Verified: mid-rollout the old task is Running on
           # the old image and this correctly reports not-yet.
           #
+          # The image alone does not identify the incoming task: a deploy that
+          # only rotates the key keeps the same image, and under start-first the
+          # outgoing task would match it while the new one is still starting.
+          # So the task must also carry THIS deploy's key secret, read from the
+          # task's own spec.
+          #
           # Publishes the matching task's id, because the health check below has
           # to read THAT task's container rather than whichever one docker lists
           # first - during a start-first rollout that can be the outgoing one.
@@ -147,11 +153,18 @@ jobs:
             want=$(docker service inspect hivesigner-api_api \
               --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}' 2>/dev/null) || return 1
             [ -n "$want" ] || return 1
-            TASK_ID=$(docker service ps hivesigner-api_api --no-trunc \
+            for id in $(docker service ps hivesigner-api_api --no-trunc \
               --filter desired-state=running \
               --format '{{.ID}} {{.CurrentState}} {{.Image}}' 2>/dev/null \
-              | awk -v want="$want" '$2 == "Running" && index($0, want) { print $1; exit }')
-            [ -n "$TASK_ID" ]
+              | awk -v want="$want" '$2 == "Running" && index($0, want) { print $1 }'); do
+              if docker inspect --type task "$id" \
+                --format '{{range .Spec.ContainerSpec.Secrets}}{{println .SecretName}}{{end}}' 2>/dev/null \
+                | grep -qxF "$BROADCASTER_POSTING_WIF_SECRET"; then
+                TASK_ID=$id
+                return 0
+              fi
+            done
+            return 1
           }
           # Then the container's health: 0 healthy, 1 unhealthy, 2 not readable
           # on this node, 3 still starting. A container with no healthcheck has
