@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { PrivateKey, Transaction, TransactionTooLargeError } from '@ecency/sdk/hive';
+import { Transaction, TransactionTooLargeError } from '@ecency/sdk/hive';
 import { authenticate, verifyPermissions } from '../helpers/middleware.js';
 import { getErrorMessage, isOperationAuthor } from '../helpers/utils.js';
 import { decodeMemo, issue } from '../helpers/token.js';
 import { getAccount } from '../helpers/client.js';
+import { broadcasterKey } from '../helpers/broadcaster.js';
 import { getAppsIndex } from '../helpers/apps.js';
 import { usageRecorder } from '../helpers/usage.js';
 import cjson from '../config.json' with { type: 'json' };
@@ -16,7 +17,7 @@ const router = Router();
 // counted /_health, which let a caller register an app name without touching a
 // single API route.
 router.use(usageRecorder);
-const privateKey = PrivateKey.fromString(process.env.BROADCASTER_POSTING_WIF);
+const privateKey = broadcasterKey();
 
 /** Get my account details */
 router.all('/me', authenticate(), async (req, res) => {

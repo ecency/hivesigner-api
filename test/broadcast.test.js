@@ -2,10 +2,15 @@ import { test, mock, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { PrivateKey } from '@ecency/sdk/hive';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-// The route signs with the broadcaster key at import. A throwaway one is enough:
-// no request in this file reaches the chain.
-process.env.BROADCASTER_POSTING_WIF = PrivateKey.fromSeed('hivesigner-api-test').toString();
+// The route reads the broadcaster key file at import. A throwaway key is
+// enough: no request in this file reaches the chain.
+const keyDir = mkdtempSync(join(tmpdir(), 'hsapi-key-'));
+process.env.BROADCASTER_POSTING_WIF_FILE = join(keyDir, 'broadcaster_posting_wif');
+writeFileSync(process.env.BROADCASTER_POSTING_WIF_FILE, `${PrivateKey.fromSeed('hivesigner-api-test')}\n`);
 process.env.BROADCASTER_USERNAME = 'broadcaster';
 
 // alice gave myapp posting authority, and myapp gave it to the broadcaster.
