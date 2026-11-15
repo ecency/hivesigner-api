@@ -16,7 +16,9 @@ The key is deliberately not an environment variable: env vars are shown by
 into the task only. The deploy workflow creates the swarm secret from the
 repository secret `BROADCASTER_POSTING_WIF`. Secrets are immutable, so each key
 value gets its own secret name (a hash suffix); changing the repository secret
-and redeploying creates a new one and removes the old.
+and redeploying creates a new one. Older ones are removed after a healthy deploy,
+except the one the service's previous spec uses, which a rollback needs; that one
+goes on the deploy after.
 
 ## The app directory: `GET /api/apps`
 

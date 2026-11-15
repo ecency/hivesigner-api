@@ -26,6 +26,11 @@ jobs:
 
   deploy:
     needs: build
+    # One deploy at a time: an overlapping run could prune the key secret this
+    # one created before its stack deploy references it.
+    concurrency:
+      group: hivesigner-api-deploy
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
     - name: Check Out Repo
@@ -75,17 +80,28 @@ jobs:
           # private key, so it reveals nothing usable.
           BROADCASTER_POSTING_WIF_SECRET="broadcaster_posting_wif_$(printf '%s' "$BROADCASTER_POSTING_WIF" | sha256sum | cut -c1-12)"
           export BROADCASTER_POSTING_WIF_SECRET
+          # The action does not stop on a failed command, so every step the
+          # deploy depends on exits explicitly: otherwise the health wait below
+          # would pass on the previous, still healthy, service.
           if ! docker secret inspect "$BROADCASTER_POSTING_WIF_SECRET" >/dev/null 2>&1; then
-            printf '%s' "$BROADCASTER_POSTING_WIF" | docker secret create "$BROADCASTER_POSTING_WIF_SECRET" - >/dev/null
+            printf '%s' "$BROADCASTER_POSTING_WIF" | docker secret create "$BROADCASTER_POSTING_WIF_SECRET" - >/dev/null \
+              || { echo "could not create the key secret"; exit 1; }
           fi
           unset BROADCASTER_POSTING_WIF
           # Superseded key secrets, once the service runs on the current one.
-          # A secret still referenced by a service cannot be removed, so this
-          # never touches the one in use.
+          # Swarm refuses to remove a secret the current spec uses, but not one
+          # only the PREVIOUS spec names, and that is the one a rollback
+          # (automatic during the update's monitor window, or a manual
+          # `docker service rollback`) restores. So that one is kept too, and
+          # goes on the deploy after.
           prune_old_key_secrets() {
+            keep=$(docker service inspect hivesigner-api_api --format \
+              '{{if .PreviousSpec}}{{range .PreviousSpec.TaskTemplate.ContainerSpec.Secrets}}{{println .SecretName}}{{end}}{{end}}' 2>/dev/null) \
+              || return 0
             docker secret ls --format '{{.Name}}' \
-              | grep '^broadcaster_posting_wif_' \
-              | grep -vx "$BROADCASTER_POSTING_WIF_SECRET" \
+              | awk -v keep="$BROADCASTER_POSTING_WIF_SECRET $keep" '
+                  BEGIN { n = split(keep, k, " "); for (i = 1; i <= n; i++) kept[k[i]] = 1 }
+                  /^broadcaster_posting_wif_/ && !($0 in kept)' \
               | xargs -r docker secret rm >/dev/null 2>&1 || true
           }
           # One-time: this host ran the API under pm2 before the move to swarm.
@@ -100,7 +116,8 @@ jobs:
           # itself. It pulls the layers before the swarm update starts, so the
           # start-first window is shorter than if the new task pulled them.
           docker pull ecency/hivesigner-api:latest
-          docker stack deploy -c docker-compose.yml hivesigner-api
+          docker stack deploy -c docker-compose.yml hivesigner-api \
+            || { echo "stack deploy failed"; exit 1; }
           # `stack deploy` returns as soon as the update is ACCEPTED, so without
           # a wait the workflow reports success over a task that never starts.
           #
