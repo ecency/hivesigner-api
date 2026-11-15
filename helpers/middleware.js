@@ -6,7 +6,7 @@ import { getAppProfile, b64uToB64 } from './utils.js';
 import { getAccount } from './client.js';
 import cjson from '../config.json' with { type: 'json' };
 
-const { intersection, has } = pkg;
+const { has } = pkg;
 const { authorized_operations } = cjson;
 
 /**
@@ -49,6 +49,27 @@ export const USED_CODE_TTL = PKCE_CODE_LIFETIME + 2 * PKCE_CLOCK_SKEW + 5;
 const exchangedCodes = new NodeCache({
   stdTTL: USED_CODE_TTL, checkperiod: 120, useClones: false,
 });
+
+// How many proxies sit in front of the app (the local nginx). Express then
+// takes req.ip from the LAST X-Forwarded-For entry, the one that proxy wrote,
+// and never from entries a caller added. Used by start.js and the tests.
+export const TRUSTED_PROXY_HOPS = 1;
+
+// The caller's address as the trusted proxy reported it, IPv4-mapped IPv6
+// (`::ffff:1.2.3.4`) written as plain IPv4 so it compares with an allowlist.
+const clientIp = (req) => (req.ip || '').replace(/^::ffff:/, '');
+
+// The app's IP allowlist, or null when it has none. It comes from the app's
+// on-chain profile, which nothing validates: an unset or empty value is no
+// allowlist, but any other value that is not an array is an allowlist that
+// matches nothing. Never a string: includes() on one is a substring match, so
+// "198.51.100.7" would let 8.51.100.7 in.
+const allowlistOf = (app) => {
+  const value = app && app.allowed_ips;
+  if (value === undefined || value === null || value === '' || value === false) return null;
+  if (Array.isArray(value)) return value.length > 0 ? value : null;
+  return [];
+};
 
 const param = (req, name) => (req.body && req.body[name]) || (req.query && req.query[name]);
 
@@ -265,13 +286,13 @@ export const authenticate = (roles) => async (req, res, next) => {
     // native app (Ecency's website holds the secret, Waves cannot). A secret
     // that is sent must always be the right one.
     const secretOk = !!app && !!app.secret && !!secretHash && secretHash === app.secret;
-    // Anything sent as a secret counts as sent, a number or an object too, and
-    // then has to be right. An app with an IP allowlist is a server: its
-    // exchanges always need the secret, because the address check reads a
-    // header the caller can set.
+    // Anything sent as a secret counts as sent, whatever its value, and then
+    // has to be right. An app with an IP allowlist is a server: its exchanges
+    // always need the secret, because an address is a second check for a
+    // server, never the only proof.
     const publicClient = !!app && !!req.pkce && !sentParam(req, 'client_secret')
       && (!app.secret || app.pkce_public === true)
-      && !(app.allowed_ips && app.allowed_ips.length > 0);
+      && !allowlistOf(app);
 
     // Every check passed. A PKCE code is used up here and nowhere earlier, so a
     // wrong verifier from whoever intercepted it does not burn the real app's
@@ -298,9 +319,9 @@ export const authenticate = (roles) => async (req, res, next) => {
         error: 'invalid_grant',
         error_description: 'The code or secret is not valid',
       });
-    } else if (app.allowed_ips && app.allowed_ips.length > 0) {
-      const reqIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-      if (intersection(app.allowed_ips, reqIp.replace(' ', '').split(',')).length > 0) {
+    } else if (allowlistOf(app)) {
+      const reqIp = clientIp(req);
+      if (allowlistOf(app).includes(reqIp)) {
         grant();
       } else {
         res.status(401).json({

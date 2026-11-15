@@ -3,7 +3,7 @@ import path from 'path';
 import bparser from 'body-parser';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
-import { strategy } from './helpers/middleware.js';
+import { strategy, TRUSTED_PROXY_HOPS } from './helpers/middleware.js';
 import apis from './routes/api.js';
 import { startAppsIndexer } from './helpers/apps.js';
 import { flushUsage, loadUsage } from './helpers/usage.js';
@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.enable('trust proxy');
+app.set('trust proxy', TRUSTED_PROXY_HOPS);
 app.disable('x-powered-by');
 
 app.use(json({ limit: '20mb' }));

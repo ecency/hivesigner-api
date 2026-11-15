@@ -49,6 +49,11 @@ const ACCOUNTS = {
   looseflag: appAccount('looseflag', { secret: SECRET_HASH, pkce_public: 'true' }),
   // A server app that limits exchanges to its own addresses.
   fencedapp: appAccount('fencedapp', { allowed_ips: ['198.51.100.7'] }),
+  // A server-side app with a secret AND an IP allowlist.
+  fencedserver: appAccount('fencedserver', { secret: SECRET_HASH, allowed_ips: ['198.51.100.7'] }),
+  // Profiles are unvalidated chain data: an allowlist that is not an array.
+  stringfenced: appAccount('stringfenced', { secret: SECRET_HASH, allowed_ips: '198.51.100.7' }),
+  objectfenced: appAccount('objectfenced', { secret: SECRET_HASH, pkce_public: true, allowed_ips: { 0: '198.51.100.7' } }),
 };
 mock.module('../helpers/client.js', {
   namedExports: { getAccount: async (name) => (ACCOUNTS[name] ? [ACCOUNTS[name]] : []) },
@@ -60,13 +65,14 @@ mock.module('../helpers/apps.js', {
   namedExports: { getAppsIndex: () => null },
 });
 
-const { strategy } = await import('../helpers/middleware.js');
+const { strategy, TRUSTED_PROXY_HOPS } = await import('../helpers/middleware.js');
 const { default: router } = await import('../routes/api.js');
 
 let server;
 let base;
 before(async () => {
   const app = express();
+  app.set('trust proxy', TRUSTED_PROXY_HOPS);
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   app.use(strategy);
@@ -426,4 +432,48 @@ test('a refresh token is still exchanged with the secret', async () => {
   const { json } = await exchange({ code: signCode({ type: 'code', app: 'webapp' }), client_secret: SECRET });
   const r = await exchange({ refresh_token: json.refresh_token, client_secret: SECRET });
   assert.equal(r.status, 200, JSON.stringify(r.json));
+});
+
+// The allowlist reads the address the trusted proxy reports, never a value the
+// caller put in X-Forwarded-For. The proxy APPENDS the address it saw, so with
+// one trusted hop that is the last entry.
+test('an allowlisted address the caller wrote into X-Forwarded-For is not believed', async () => {
+  const r = await exchange(
+    { code: signCode({ type: 'code', app: 'fencedserver' }), client_secret: SECRET },
+    { 'x-forwarded-for': '198.51.100.7, 203.0.113.9' },
+  );
+  assert.equal(r.status, 401, JSON.stringify(r.json));
+  assert.equal(r.json.error, 'unauthorized_access');
+});
+
+test('an allowlisted address reported by the proxy is let through', async () => {
+  const r = await exchange(
+    { code: signCode({ type: 'code', app: 'fencedserver' }), client_secret: SECRET },
+    { 'x-forwarded-for': '203.0.113.9, 198.51.100.7' },
+  );
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+});
+
+test('without a proxy header the connection address is checked', async () => {
+  const r = await exchange({ code: signCode({ type: 'code', app: 'fencedserver' }), client_secret: SECRET });
+  assert.equal(r.status, 401, JSON.stringify(r.json));
+  assert.equal(r.json.error, 'unauthorized_access');
+});
+
+for (const app of ['stringfenced', 'objectfenced']) {
+  for (const ip of ['8.51.100.7', '198.51.100.7']) {
+    test(`an allowlist stored as a ${app.replace('fenced', '')} refuses ${ip}`, async () => {
+      const r = await exchange(
+        { code: signCode({ type: 'code', app }), client_secret: SECRET },
+        { 'x-forwarded-for': ip },
+      );
+      assert.equal(r.status, 401, JSON.stringify(r.json));
+      assert.equal(r.json.error, 'unauthorized_access');
+    });
+  }
+}
+
+test('an allowlist that is not an array still keeps a PKCE code from a secret-less exchange', async () => {
+  const verifier = newVerifier();
+  refusedAsInvalidGrant(await exchange({ code: pkceCode('objectfenced', verifier), code_verifier: verifier }));
 });
