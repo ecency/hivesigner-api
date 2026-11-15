@@ -158,7 +158,8 @@ message, so the challenge cannot be changed after the user approved.
   it, never the only proof. Such an account cannot serve a native app. The
   address checked is the caller's as the proxy in front of the API reports it
   (one trusted hop, `TRUSTED_PROXY_HOPS`), never an entry the caller added to
-  `X-Forwarded-For`.
+  `X-Forwarded-For`. List every address the app's server can call from: a server that
+  reaches the API over IPv6 is seen by its IPv6 address.
 - Used codes are kept in memory. A restart forgets them, so a code exchanged
   just before a restart could be exchanged once more until it expires, by
   whoever also holds its verifier.
