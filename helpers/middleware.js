@@ -59,6 +59,18 @@ export const TRUSTED_PROXY_HOPS = 1;
 // (`::ffff:1.2.3.4`) written as plain IPv4 so it compares with an allowlist.
 const clientIp = (req) => (req.ip || '').replace(/^::ffff:/, '');
 
+// The app's IP allowlist, or null when it has none. It comes from the app's
+// on-chain profile, which nothing validates: an unset or empty value is no
+// allowlist, but any other value that is not an array is an allowlist that
+// matches nothing. Never a string: includes() on one is a substring match, so
+// "198.51.100.7" would let 8.51.100.7 in.
+const allowlistOf = (app) => {
+  const value = app && app.allowed_ips;
+  if (value === undefined || value === null || value === '' || value === false) return null;
+  if (Array.isArray(value)) return value.length > 0 ? value : null;
+  return [];
+};
+
 const param = (req, name) => (req.body && req.body[name]) || (req.query && req.query[name]);
 
 // Whether the request carries the field at all, whatever its value. `param`
@@ -280,7 +292,7 @@ export const authenticate = (roles) => async (req, res, next) => {
     // server, never the only proof.
     const publicClient = !!app && !!req.pkce && !sentParam(req, 'client_secret')
       && (!app.secret || app.pkce_public === true)
-      && !(app.allowed_ips && app.allowed_ips.length > 0);
+      && !allowlistOf(app);
 
     // Every check passed. A PKCE code is used up here and nowhere earlier, so a
     // wrong verifier from whoever intercepted it does not burn the real app's
@@ -307,9 +319,9 @@ export const authenticate = (roles) => async (req, res, next) => {
         error: 'invalid_grant',
         error_description: 'The code or secret is not valid',
       });
-    } else if (app.allowed_ips && app.allowed_ips.length > 0) {
+    } else if (allowlistOf(app)) {
       const reqIp = clientIp(req);
-      if (app.allowed_ips.includes(reqIp)) {
+      if (allowlistOf(app).includes(reqIp)) {
         grant();
       } else {
         res.status(401).json({
